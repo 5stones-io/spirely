@@ -1,0 +1,30 @@
+# Ory Hydra config — self-hosted OAuth2/OIDC layer sitting alongside Spirely's
+# own Rodauth-based login. Most values are overridden by env vars in
+# docker-compose.yml (DSN, SECRETS_SYSTEM, URLS_*); this file documents the
+# full shape and sets sane non-secret defaults.
+
+serve:
+  cookies:
+    same_site_mode: Lax
+
+urls:
+  self:
+    issuer: http://localhost:4444
+  # Where Hydra sends the browser when it needs Spirely to establish (or
+  # confirm) a login / consent decision. Rodauth does the actual credential
+  # check; these just point at the small bridge controllers.
+  login: http://localhost:3000/bridge/login
+  consent: http://localhost:3000/bridge/consent
+
+oidc:
+  subject_identifiers:
+    supported_types:
+      - public
+
+# Access/refresh/ID token lifespans — conservative defaults, tune per client
+# later via the OAuth2 client's `token_endpoint_auth_method`/lifespans config.
+ttl:
+  access_token: 1h
+  refresh_token: 720h
+  id_token: 1h
+  auth_code: 10m

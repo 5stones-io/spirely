@@ -1,0 +1,49 @@
+services:
+  hydra-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: hydra
+      POSTGRES_DB: hydra
+    ports:
+      - "5433:5432"
+    volumes:
+      - hydra_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hydra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  hydra-migrate:
+    image: oryd/hydra:2.2
+    depends_on:
+      hydra-postgres:
+        condition: service_healthy
+    environment:
+      DSN: postgres://hydra:hydra@hydra-postgres:5432/hydra?sslmode=disable
+    command: migrate sql -e --yes
+    restart: "no"
+
+  hydra:
+    image: oryd/hydra:2.2
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "4444:4444" # public (token/authorize endpoints)
+      - "4445:4445" # admin (login/consent/client management)
+    environment:
+      DSN: postgres://hydra:hydra@hydra-postgres:5432/hydra?sslmode=disable
+      SECRETS_SYSTEM: ${HYDRA_SECRETS_SYSTEM}
+      URLS_SELF_ISSUER: http://localhost:4444
+      URLS_LOGIN: http://host.docker.internal:3000/bridge/login
+      URLS_CONSENT: http://host.docker.internal:3000/bridge/consent
+    command: serve all --dev
+    volumes:
+      - ./hydra/hydra.yml:/etc/config/hydra/hydra.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  hydra_postgres_data:

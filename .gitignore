@@ -1,0 +1,31 @@
+# Environment
+.env
+.env.local
+.env.*.local
+.env.*
+
+# Rails
+log/
+tmp/
+storage/
+public/assets/
+config/master.key
+config/credentials/*.key
+
+# Ruby
+.bundle/
+vendor/bundle/
+*.gem
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docs pulled in from kidspire during scaffolding, not tracked here
+CLAUDE_CODE_CONTEXT.md
+CLAUDE.md
