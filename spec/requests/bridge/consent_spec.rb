@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "Bridge::ConsentController", type: :request do
+RSpec.describe "Spirely::Bridge::ConsentController", type: :request do
   let(:hydra_admin) { Spirely.configuration.hydra_admin_url }
 
   describe "GET /bridge/consent" do

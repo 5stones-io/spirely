@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "Bridge::LoginController", type: :request do
+RSpec.describe "Spirely::Bridge::LoginController", type: :request do
   let(:hydra_admin) { Spirely.configuration.hydra_admin_url }
 
   describe "GET /bridge/login" do
