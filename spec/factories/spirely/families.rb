@@ -1,5 +1,6 @@
 FactoryBot.define do
   factory :spirely_family, class: "Spirely::Family" do
+    association :church
     association :account
     sequence(:family_name) { |n| "Family #{n}" }
     primary_contact_first_name { "Jane" }

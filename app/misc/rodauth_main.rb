@@ -14,25 +14,46 @@ class RodauthMain < Rodauth::Rails::Auth
 
     jwt_secret { Rails.application.secret_key_base }
 
-    # Add email + admin + 2-hour expiry to the JWT payload.
-    # Guard against nil account (Rodauth calls set_jwt on error responses too).
+    # Deliberately does NOT embed church_id or role — a family's or staff
+    # member's authorization comes from Current.church (resolved fresh from
+    # the Host header every request) joined against Membership, not a value
+    # baked into a long-lived JWT. That would let a revoked invite or a
+    # church change lag until token expiry for no benefit, since the Host
+    # header already gives the tenant for free on every request. The JWT is
+    # purely "who" (email + exp); "where + what role" resolves per-request
+    # (see Api::V1::BaseController#admin?).
+    #
+    # 30-day expiry (was a 2-hour default) — a short-lived token meant
+    # re-requesting a magic link every time someone came back after a
+    # couple hours idle. No server-side revocation exists for a JWT, so a
+    # leaked token stays valid for the full window; acceptable given the
+    # small number of accounts and no other higher-value target here. If
+    # that trade-off stops being fine, the real fix is Rodauth's
+    # jwt_refresh feature (short-lived access token + a longer-lived
+    # refresh token), not just tuning this number.
     jwt_session_hash do
       base = super()
       if account
         base.merge(
           "email" => account[login_column].to_s,
-          "admin" => (account[:admin] || false),
-          "exp"   => (Time.now + 7_200).to_i
+          "exp"   => 30.days.from_now.to_i
         )
       else
         base
       end
     end
 
-    # Auto-create account on first magic-link request.
+    # Auto-create account on first magic-link request. Downcased before
+    # lookup/create — Account itself normalizes on save too, but that
+    # callback runs too late to affect this find_or_create_by!'s own
+    # find_by, which is why both sides need to agree independently (see
+    # Account#normalize_email's comment for the case-mismatch this guards
+    # against — two different-case spellings of the same email silently
+    # resolving to two different Account rows).
     account_from_login do |login|
-      Account.find_or_create_by!(email: login)
-      @account = db[accounts_table].where(login_column => login).first
+      normalized = login.to_s.strip.downcase
+      Account.find_or_create_by!(email: normalized)
+      @account = db[accounts_table].where(login_column => normalized).first
     end
 
     # Verify magic link key. Rodauth's built-in account_from_key uses string-to-bigint
@@ -58,11 +79,15 @@ class RodauthMain < Rodauth::Rails::Auth
 
     # Build magic link with full Rodauth token format: account_id + separator + raw_key.
     #
-    # When the request originated from the Ory Hydra login bridge
-    # (bridge/login_controller.rb), a `login_challenge` param is present —
-    # route the link through the bridge's callback instead of the generic
-    # frontend callback so the Hydra login request gets accepted once the
-    # key is verified. Plain (non-Hydra) logins keep the original behavior.
+    # Always routes back to the *requesting* host (scope.request.base_url),
+    # not a single static FRONTEND_BASE_URL — a church may be reached at its
+    # own slug subdomain or a verified custom domain (see TenantResolution),
+    # and the magic link has to land back on whichever host was actually
+    # used to request it. When the request originated from the Ory Hydra
+    # login bridge (bridge/login_controller.rb), a `login_challenge` param
+    # is present — route the link through the bridge's callback instead of
+    # the generic frontend callback so the Hydra login request gets
+    # accepted once the key is verified.
     send_email_auth_email do
       email      = account[login_column]
       full_token = "#{account_id}#{token_separator}#{email_auth_key_value}"
@@ -75,9 +100,7 @@ class RodauthMain < Rodauth::Rails::Auth
           "&email=#{CGI.escape(email)}" \
           "&login_challenge=#{CGI.escape(login_challenge)}"
         else
-          base = Spirely.configuration.frontend_base_url.presence ||
-                   ENV.fetch("RAILWAY_PUBLIC_DOMAIN") { raise "FRONTEND_BASE_URL is not set" }.then { |d| "https://#{d}" }
-          "#{base}/auth/callback?key=#{CGI.escape(full_token)}&email=#{CGI.escape(email)}"
+          "#{scope.request.base_url}/auth/callback?key=#{CGI.escape(full_token)}&email=#{CGI.escape(email)}"
         end
       Rails.logger.warn("\n\n🔐 [spirely] Magic link for #{email}:\n#{link}\n\n")
 

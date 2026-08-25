@@ -14,9 +14,13 @@ RSpec.describe Spirely::Child, type: :model do
       expect(build(:spirely_child, last_name: "")).not_to be_valid
     end
 
-    it "rejects grade outside 0..12" do
+    it "rejects grade outside -1..12" do
       expect(build(:spirely_child, grade: 13)).not_to be_valid
-      expect(build(:spirely_child, grade: -1)).not_to be_valid
+      expect(build(:spirely_child, grade: -2)).not_to be_valid
+    end
+
+    it "allows -1 (PCO's Pre-K convention)" do
+      expect(build(:spirely_child, grade: -1)).to be_valid
     end
 
     it "allows a nil grade" do

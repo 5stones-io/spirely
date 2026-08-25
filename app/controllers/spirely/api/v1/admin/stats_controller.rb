@@ -6,16 +6,18 @@ module Spirely
           before_action :require_admin!
 
           def show
+            families = Current.church.families
+
             render json: {
               families: {
-                total:   Family.count,
-                active:  Family.where.not(account_id: nil).count,
-                pending: Family.where(account_id: nil).count,
+                total:   families.count,
+                active:  families.where.not(account_id: nil).count,
+                pending: families.where(account_id: nil).count,
               },
-              children: Child.count,
+              children: Current.church.children.count,
               invitations: {
-                pending: Invitation.where(accepted_at: nil)
-                                   .where("expires_at > ?", Time.current).count,
+                pending: Current.church.invitations.where(accepted_at: nil)
+                                        .where("expires_at > ?", Time.current).count,
               },
             }
           end

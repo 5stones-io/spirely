@@ -3,7 +3,7 @@ require "spirely/errors"
 require "spirely/configuration"
 require "spirely/encryption"
 require "spirely/pco_client"
-require "spirely/sms_client"
+require "spirely/sms"
 require "spirely/hydra_client"
 require "spirely/engine"
 

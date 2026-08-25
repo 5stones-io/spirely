@@ -1,6 +1,7 @@
 class CreateSpirelyChildren < ActiveRecord::Migration[7.2]
   def change
     create_table :spirely_children do |t|
+      t.bigint   :church_id, null: false
       t.bigint   :family_id, null: false
       t.string   :first_name, null: false
       t.string   :last_name, null: false
@@ -10,12 +11,17 @@ class CreateSpirelyChildren < ActiveRecord::Migration[7.2]
       t.string   :pco_person_id
       t.datetime :pco_last_synced_at
       t.uuid     :public_id, null: false, default: -> { "gen_random_uuid()" }
+      t.text     :allergens, array: true, default: [], null: false
+      t.text     :allergy_notes
+      t.datetime :allergy_updated_at
       t.timestamps
     end
 
+    add_index :spirely_children, :church_id
     add_index :spirely_children, :family_id
     add_index :spirely_children, :pco_person_id
     add_index :spirely_children, :public_id, unique: true
+    add_foreign_key :spirely_children, :churches
     add_foreign_key :spirely_children, :spirely_families, column: :family_id
   end
 end

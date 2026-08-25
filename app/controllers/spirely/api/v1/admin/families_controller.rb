@@ -5,9 +5,13 @@ module Spirely
         class FamiliesController < BaseController
           before_action :require_admin!
 
-          # GET /api/v1/admin/families
+          # GET /api/v1/admin/families?status=active|inactive&search=becca
           def index
-            families = Family.includes(:children, :account)
+            scope = Current.church.families.with_children
+            scope = params[:status] == "inactive" ? scope.attendance_inactive : scope.attendance_active
+            scope = scope.search(params[:search]) if params[:search].present?
+
+            families = scope.includes(:children, :guardians, :account)
                              .order(created_at: :desc)
                              .page(params[:page]).per(50)
 
@@ -22,6 +26,11 @@ module Spirely
                   phone:                      f.phone,
                   address:                    f.address,
                   children_count:             f.children.size,
+                  # Every other adult in the household — Chad's ask,
+                  # so the list view itself shows the whole household
+                  # before expanding to kids, not just the one PCO
+                  # designates the primary contact.
+                  guardian_names:             f.guardians.map { |g| "#{g.first_name} #{g.last_name}".strip },
                   account_linked:             f.account_id.present?,
                   pco_synced:                 f.pco_last_synced_at.present?,
                   created_at:                 f.created_at,
@@ -37,10 +46,15 @@ module Spirely
 
           # GET /api/v1/admin/families/:id
           def show
-            family = Family.includes(:children, :guardians, :account).find(params[:id])
-            pending_invite = Invitation.where(family: family, accepted_at: nil)
-                                       .where("expires_at > ?", Time.current)
-                                       .order(created_at: :desc).first
+            family = Current.church.families.includes(:children, :guardians, :account).find(params[:id])
+            # guardian_id: nil scopes this to the family's own primary-
+            # contact invite specifically — a guardian-scoped invite
+            # (multi-account family access) also belongs_to :family, so
+            # without this a more-recently-sent guardian invite could
+            # shadow the family's own pending invite_url here.
+            pending_invite = family.invitations.where(accepted_at: nil, guardian_id: nil)
+                                    .where("expires_at > ?", Time.current)
+                                    .order(created_at: :desc).first
 
             render json: {
               id:                         family.id,
@@ -57,33 +71,39 @@ module Spirely
               created_at:                 family.created_at,
               children:   family.children.map { |c|
                 { id: c.id, first_name: c.first_name, last_name: c.last_name,
-                  grade_display: c.grade_display, age: c.age, notes: c.notes }
+                  grade_display: c.grade_display, age: c.age, notes: c.notes,
+                  allergy_summary: c.allergy_summary, allergy_updated_at: c.allergy_updated_at }
               },
               guardians:  family.guardians.map { |g|
                 { id: g.id, first_name: g.first_name, last_name: g.last_name,
-                  phone: g.phone, email: g.email, relationship: g.relationship }
+                  phone: g.phone, email: g.email, relationship: g.relationship,
+                  account_linked: g.account_id.present?,
+                  # Lets the UI offer a direct "Add as Volunteer" action
+                  # right from this row — pco_person_id is what
+                  # POST /admin/volunteer_profiles actually needs (same
+                  # endpoint the PCO-search "+ Add Volunteer" flow
+                  # already uses), nil for a Quick-Add-only guardian with
+                  # no PCO identity to seed a profile from.
+                  pco_person_id: g.pco_person_id,
+                  is_volunteer:  g.person&.volunteer_profile.present? }
               },
               invite_url: pending_invite&.invite_url,
             }
           end
 
           # POST /api/v1/admin/families/:id/invite
-          # Creates a fresh invitation (or returns the existing active one) and
-          # optionally re-sends via SMS.
           def invite
-            family = Family.find(params[:id])
+            family = Current.church.families.find(params[:id])
 
-            # Expire any old invitations so we start clean
-            Invitation.where(family: family, accepted_at: nil).update_all(expires_at: Time.current)
+            family.invitations.where(accepted_at: nil).update_all(expires_at: Time.current)
 
-            invitation    = Invitation.create!(family: family)
-            invite_method = send_invite(family, invitation)
+            invitation     = family.invitations.create!
+            invite_methods = send_invite(family, invitation)
 
-            render json: { invite_url: invitation.invite_url, invite_method: invite_method }
+            render json: { invite_url: invitation.invite_url, invite_methods: invite_methods }
           end
 
           # POST /api/v1/admin/families
-          # Quick-creates a family + children + invitation, optionally sends SMS.
           def create
             if family_params[:address].blank?
               return render json: { error: "Home address is required", code: "validation_error" },
@@ -96,22 +116,21 @@ module Spirely
             build_children(family)
             build_guardians(family)
 
-            invitation    = Invitation.create!(family: family)
-            invite_method = send_invite(family, invitation)
+            invitation     = family.invitations.create!
+            invite_methods = send_invite(family, invitation)
 
-            # Push to PCO in the background only if already connected
-            pco_connected   = ChurchIntegration.current.access_token.present? &&
-                              (ChurchIntegration.current.expires_at.nil? ||
-                               ChurchIntegration.current.expires_at > Time.current)
-            pco_sync_queued = pco_connected
-            PcoCreatePersonJob.perform_later(family.id) if pco_sync_queued
+            pco_connected   = Current.church.church_integration&.pco_connected? &&
+                              (Current.church.church_integration.expires_at.nil? ||
+                               Current.church.church_integration.expires_at > Time.current)
+            PcoCreatePersonJob.perform_later(family.id) if pco_connected
 
             render json: {
               family:          FamilyBlueprint.render_as_hash(family, view: :with_children),
               invite_url:      invitation.invite_url,
-              invite_method:   invite_method,   # "sms" | "email" | "none"
-              sms_sent:        invite_method == "sms",
-              pco_sync_queued: pco_sync_queued,
+              invite_methods:  invite_methods, # any of "sms", "email" — both sent when both are available
+              sms_sent:        invite_methods.include?("sms"),
+              email_sent:      invite_methods.include?("email"),
+              pco_sync_queued: pco_connected,
             }, status: :created
 
           rescue ActiveRecord::RecordInvalid => e
@@ -123,10 +142,9 @@ module Spirely
 
           def build_family
             p = family_params
-
             family_name = "#{p[:primary_contact_last_name]} Family"
 
-            Family.new(
+            Current.church.families.new(
               family_name:                family_name,
               primary_contact_first_name: p[:primary_contact_first_name].presence,
               primary_contact_last_name:  p[:primary_contact_last_name].presence,
@@ -167,8 +185,6 @@ module Spirely
             end
           end
 
-          # Convert age integer to an approximate birthdate (July 1 of birth year).
-          # Parents correct the exact date when completing their profile.
           def age_to_birthdate(age)
             return nil if age.blank?
             years = age.to_i
@@ -176,22 +192,27 @@ module Spirely
             Date.new(Date.current.year - years, 7, 1)
           end
 
-          # Returns "sms", "email", or "none" depending on what was sent.
-          # SMS is preferred when Twilio is configured and the family has a phone.
-          # Email is the fallback when Twilio is not configured.
+          # Returns which of "sms"/"email" actually went out — both, when
+          # both a phone (with Twilio configured) and an email are on
+          # file, not one-or-the-other. Belt-and-suspenders: Twilio
+          # accepting a send only means PCO/Twilio queued it, not that it
+          # actually reached the phone (carrier-side filtering — e.g. a
+          # number not yet A2P 10DLC registered — happens silently and
+          # asynchronously, with nothing for this app to check in real
+          # time), so email going out too gives the family a working
+          # fallback rather than a single point of failure. "sms" is only
+          # included on an actual successful Twilio API accept — a raised
+          # Spirely::Error is logged, not counted as sent. The
+          # invite_url is always in the response either way, so staff can
+          # hand it over directly regardless of what did or didn't land.
           def send_invite(family, invitation)
-            if SmsClient.configured? && family.phone.present?
-              first = family.primary_contact_first_name.presence || "there"
-              body  = "Hi #{first}! Complete your family profile here: " \
-                      "#{invitation.invite_url} (link expires in 7 days)"
-              SmsClient.send(to: family.phone, body: body)
-              "sms"
-            elsif family.email.present?
-              Spirely::InviteMailer.invite(family, invitation).deliver_later
-              "email"
-            else
-              "none"
-            end
+            Spirely::InviteSender.call(
+              church:     Current.church,
+              first_name: family.primary_contact_first_name,
+              phone:      family.phone,
+              email:      family.email,
+              invitation: invitation
+            )
           end
 
           def family_params

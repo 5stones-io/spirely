@@ -2,12 +2,14 @@ module Spirely
   class PcoOutboundProfileSyncJob < ApplicationJob
     def perform(family_id)
       family = Family.find(family_id)
+      church = family.church
 
       return unless family.pco_sync_enabled?
-      return unless SyncSetting.current.outbound_people_sync?
-      return if family.pco_person_id.blank?  # v1: only update existing PCO people
+      return unless church.sync_setting&.outbound_people_sync?
+      return if family.pco_person_id.blank?
+      return unless church.church_integration&.pco_connected?
 
-      client = PcoClient.new
+      client = Spirely::PcoClient.new(church.church_integration)
 
       client.patch("/people/v2/people/#{family.pco_person_id}", {
         data: {
@@ -18,10 +20,10 @@ module Spirely
       })
 
       family.update_column(:pco_last_synced_at, Time.current)
-      Rails.logger.info("[Spirely] PcoOutboundProfileSyncJob complete for family #{family_id}")
+      Rails.logger.info("[Spirely] PcoOutboundProfileSyncJob complete for family #{family_id} (church #{church.id})")
     rescue ActiveRecord::RecordNotFound
       Rails.logger.warn("[Spirely] PcoOutboundProfileSyncJob: family #{family_id} not found, discarding")
-    rescue PcoError => e
+    rescue Spirely::PcoError => e
       Rails.logger.error("[Spirely] PcoOutboundProfileSyncJob failed for family #{family_id}: #{e.message}")
       raise
     end

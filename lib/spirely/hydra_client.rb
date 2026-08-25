@@ -1,20 +1,16 @@
 require "httparty"
 
 module Spirely
-  # Thin wrapper around Ory Hydra's admin API (login/consent flow +
-  # token introspection). Mirrors Spirely::PcoClient's shape — plain
-  # HTTParty, no vendor SDK, since Hydra's admin API is a handful of
-  # well-documented REST calls.
+  # Thin wrapper around Ory Hydra's admin API (login/consent flow). Reused
+  # near-verbatim from self-hosted spirely — Hydra's admin API operates on
+  # cross-tenant OAuth2 concepts (clients, login/consent challenges) by
+  # nature, so it needs no tenant-awareness of its own.
   class HydraClient
     include HTTParty
 
     def initialize
       self.class.base_uri Spirely.configuration.hydra_admin_url
     end
-
-    # ------------------------------------------------------------------
-    # Login flow
-    # ------------------------------------------------------------------
 
     def get_login_request(challenge)
       request(:get, "/admin/oauth2/auth/requests/login", query: { login_challenge: challenge })
@@ -36,10 +32,6 @@ module Spirely
         body: { error: error, error_description: error_description }.to_json)
     end
 
-    # ------------------------------------------------------------------
-    # Consent flow
-    # ------------------------------------------------------------------
-
     def get_consent_request(challenge)
       request(:get, "/admin/oauth2/auth/requests/consent", query: { consent_challenge: challenge })
     end
@@ -60,10 +52,6 @@ module Spirely
         body: { error: error, error_description: error_description }.to_json)
     end
 
-    # ------------------------------------------------------------------
-    # OAuth2 clients
-    # ------------------------------------------------------------------
-
     def get_client(client_id)
       request(:get, "/admin/clients/#{client_id}")
     end
@@ -74,7 +62,7 @@ module Spirely
       response = self.class.send(method, path, options.merge(headers: json_headers))
 
       unless response.success?
-        raise HydraError.new(
+        raise Spirely::HydraError.new(
           "Hydra admin API #{method.upcase} #{path} returned #{response.code}",
           status: response.code,
           body:   response.body

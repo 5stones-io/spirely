@@ -5,18 +5,12 @@ module Spirely
         before_action :require_admin!
 
         def show
-          render json: SyncSettingBlueprint.render(SyncSetting.current)
+          render json: SyncSettingBlueprint.render(current_sync_setting)
         end
 
         def update
-          settings = SyncSetting.current
-          was_auto  = settings.auto_sync_enabled?
-
+          settings = current_sync_setting
           if settings.update(sync_setting_params)
-            # If auto-sync was just enabled, kick off the scheduled chain
-            if settings.auto_sync_enabled? && !was_auto
-              Spirely::PcoScheduledSyncJob.kick_off_if_enabled!
-            end
             render json: SyncSettingBlueprint.render(settings)
           else
             render json: { error: settings.errors.full_messages.first, code: "validation_error" },
@@ -26,6 +20,10 @@ module Spirely
 
         private
 
+        def current_sync_setting
+          Current.church.sync_setting || Current.church.create_sync_setting!
+        end
+
         def sync_setting_params
           params.require(:sync_setting).permit(
             :inbound_people_sync,
@@ -33,7 +31,11 @@ module Spirely
             :sync_frequency_hours,
             :conflict_resolution,
             :auto_sync_enabled,
-            :pco_ministry_tag
+            :pco_ministry_tag,
+            :pco_assessment_field_id,
+            :pco_assessment_field_name,
+            pco_kids_service_types: [:service_type_id, :service_type_name, :check_ins_event_name],
+            pco_event_tags: [:tag_id, :tag_name]
           )
         end
       end

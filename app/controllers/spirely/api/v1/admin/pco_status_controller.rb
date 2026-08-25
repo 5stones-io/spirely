@@ -6,13 +6,13 @@ module Spirely
           before_action :require_admin!
 
           def show
-            integration = ChurchIntegration.current
-            connected   = integration.access_token.present? &&
+            integration = Current.church.church_integration
+            connected   = integration&.pco_connected? &&
                           (integration.expires_at.nil? || integration.expires_at > Time.current)
 
             render json: {
-              connected:  connected,
-              expires_at: integration.expires_at,
+              connected:  connected || false,
+              expires_at: integration&.expires_at,
             }
           end
         end
