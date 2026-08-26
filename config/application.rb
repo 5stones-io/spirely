@@ -4,6 +4,12 @@ require "action_controller/railtie"
 require "action_view/railtie"
 require "action_mailer/railtie"
 require "active_job/railtie"
+# Needed for Church#logo (has_one_attached), added alongside the church
+# branding feature. The host app (spirely-cloud) already has real
+# active_storage_* tables (added earlier for Incident photos); this repo's
+# own standalone/dummy database needs the same tables for its own spec
+# suite to exercise Church#logo at all.
+require "active_storage/engine"
 
 Bundler.require(*Rails.groups)
 

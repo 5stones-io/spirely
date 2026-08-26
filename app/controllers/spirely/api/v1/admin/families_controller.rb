@@ -15,6 +15,9 @@ module Spirely
                              .order(created_at: :desc)
                              .page(params[:page]).per(50)
 
+            invite_status_by_family_id = latest_invite_status_by_family_id(families.map(&:id))
+            last_check_in_by_pco_person_id = last_check_in_by_pco_person_id_hash
+
             render json: {
               families: families.map { |f|
                 {
@@ -32,6 +35,16 @@ module Spirely
                   # designates the primary contact.
                   guardian_names:             f.guardians.map { |g| "#{g.first_name} #{g.last_name}".strip },
                   account_linked:             f.account_id.present?,
+                  # Only meaningful while account_linked is false — once an
+                  # account claims the family there's nothing left
+                  # "pending". "not_invited" (no Invitation row at all,
+                  # the actual gap Chad hit — every family showed the same
+                  # generic "Pending" whether or not anyone had ever sent
+                  # an invite) vs. "pending" (a real unexpired invite
+                  # exists) vs. "expired" both come from the same one
+                  # batched query, not a per-row lookup.
+                  invite_status:              f.account_id.present? ? nil : (invite_status_by_family_id[f.id] || "not_invited"),
+                  last_check_in_at:           last_check_in_for(f, last_check_in_by_pco_person_id),
                   pco_synced:                 f.pco_last_synced_at.present?,
                   created_at:                 f.created_at,
                 }
@@ -139,6 +152,58 @@ module Spirely
           end
 
           private
+
+          # One query for the whole page, not one per family — same
+          # discipline #index already applies to guardian_names above.
+          # guardian_id: nil matches #show's own pending_invite scoping
+          # (the family's own primary-contact invite, not a guardian-
+          # scoped one) — "ever invited" should track the same invite
+          # #show already surfaces, not a different notion of it.
+          def latest_invite_status_by_family_id(family_ids)
+            return {} if family_ids.empty?
+
+            latest = Spirely::Invitation
+              .where(family_id: family_ids, guardian_id: nil)
+              .select("DISTINCT ON (family_id) *")
+              .order(:family_id, created_at: :desc)
+
+            latest.index_by(&:family_id).transform_values { |invitation|
+              # "accepted" is realistically unreachable here (an accepted
+              # family-primary invite sets account_id, so the caller never
+              # even looks this up for that family) — kept as an honest
+              # fallback rather than assumed impossible.
+              if invitation.accepted_at.present?
+                "accepted"
+              elsif invitation.expires_at > Time.current
+                "pending"
+              else
+                "expired"
+              end
+            }
+          end
+
+          # {pco_person_id => most recent checked_in_at} across every
+          # Person this church has ever recorded attendance for, in one
+          # query — Family/Child#person's own `find_by` join is exactly
+          # right for a single record, but would be an N+1 across a
+          # 50-row page.
+          def last_check_in_by_pco_person_id_hash
+            Spirely::Person.where(church: Current.church)
+                            .joins(:attendances)
+                            .group(:pco_person_id)
+                            .maximum(:checked_in_at)
+          end
+
+          # A family's own last check-in is the most recent across the
+          # primary contact AND every child — mirrors
+          # NewFamilyNudgeCalculator#earliest_attendance_for's same
+          # "look at family.person and every child's person" shape, just
+          # latest instead of earliest, and reading the batched hash
+          # above instead of a live query per family.
+          def last_check_in_for(family, lookup)
+            pco_ids = [family.pco_person_id, *family.children.map(&:pco_person_id)].compact
+            pco_ids.filter_map { |id| lookup[id] }.max
+          end
 
           def build_family
             p = family_params

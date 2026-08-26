@@ -42,6 +42,18 @@ class Church < ApplicationRecord
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy
   has_one  :sync_setting, class_name: "Spirely::SyncSetting", dependent: :destroy
 
+  # App-shell brand mark (sidebar/mobile top bar logo + wordmark) — lets a
+  # church make that corner look like their own. Not the AI-generated
+  # per-church module theming pipeline described in CLAUDE.md's "Planned"
+  # section (a much bigger, still-unbuilt feature); this is just a static
+  # logo + display name a church sets once in Settings.
+  has_one_attached :logo
+
+  MAX_LOGO_SIZE = 2.megabytes
+  ALLOWED_LOGO_TYPES = %w[image/png image/jpeg image/svg+xml image/webp].freeze
+
+  validate :logo_within_size_and_type_limits
+
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9]([a-z0-9\-]*[a-z0-9])?\z/, message: "must be lowercase letters, numbers, and hyphens" }
   validates :name, presence: true
@@ -50,6 +62,12 @@ class Church < ApplicationRecord
 
   def module_enabled?(name)
     enabled_modules.include?(name.to_s)
+  end
+
+  # What the app shell's brand mark actually shows — falls back to the
+  # church's real `name` when no shorter display_name has been set.
+  def brand_name
+    display_name.presence || name
   end
 
   def placeholder_slug?
@@ -86,5 +104,14 @@ class Church < ApplicationRecord
   def primary_hostname
     verified_primary_domain = custom_domains.find { |d| d.primary? && d.verified? }
     verified_primary_domain&.hostname || ENV.fetch("APP_HOST", "localhost:3000")
+  end
+
+  private
+
+  def logo_within_size_and_type_limits
+    return unless logo.attached?
+
+    errors.add(:logo, "must be smaller than #{MAX_LOGO_SIZE / 1.megabyte}MB") if logo.blob.byte_size > MAX_LOGO_SIZE
+    errors.add(:logo, "must be a PNG, JPEG, SVG, or WebP image") unless ALLOWED_LOGO_TYPES.include?(logo.blob.content_type)
   end
 end

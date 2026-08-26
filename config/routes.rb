@@ -49,6 +49,7 @@ Spirely::Engine.routes.draw do
         # the actual singular ConfigController/PcoStatusController classes.
         resource  :config,     only: [:show, :update], controller: "config" do
           get :connect_url
+          delete :logo, on: :collection, action: :remove_logo
         end
         resource  :pco_status, only: [:show], controller: "pco_status"
         resource  :twilio_verification, only: [:create], controller: "twilio_verification" do

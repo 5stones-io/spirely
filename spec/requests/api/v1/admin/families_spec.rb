@@ -50,6 +50,109 @@ RSpec.describe "Admin Families API", type: :request do
       expect(response).to have_http_status(:ok)
       expect(JSON.parse(response.body)["families"].map { |f| f["id"] }).to eq([family.id])
     end
+
+    it "reports not_invited for a family with no Invitation row at all" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      family = create(:spirely_family, church: church, account: nil)
+      create(:spirely_child, family: family)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "inactive" }, headers: auth_headers(admin)
+      body = JSON.parse(response.body)["families"].first
+      expect(body["account_linked"]).to eq(false)
+      expect(body["invite_status"]).to eq("not_invited")
+    end
+
+    it "reports pending for a family with an active, unexpired invite" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      family = create(:spirely_family, church: church, account: nil)
+      create(:spirely_child, family: family)
+      create(:spirely_invitation, family: family, expires_at: 6.days.from_now)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "inactive" }, headers: auth_headers(admin)
+      expect(JSON.parse(response.body)["families"].first["invite_status"]).to eq("pending")
+    end
+
+    it "reports expired for a family whose only invite has lapsed" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      family = create(:spirely_family, church: church, account: nil)
+      create(:spirely_child, family: family)
+      # expires_at is force-set to 7.days.from_now by Invitation's own
+      # before_create callback regardless of what's passed at creation
+      # (see generate_token) — update_column after the fact to actually
+      # get an expired row.
+      create(:spirely_invitation, family: family).update_column(:expires_at, 1.day.ago)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "inactive" }, headers: auth_headers(admin)
+      expect(JSON.parse(response.body)["families"].first["invite_status"]).to eq("expired")
+    end
+
+    it "uses the most recent invite when a family has more than one" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      family = create(:spirely_family, church: church, account: nil)
+      create(:spirely_child, family: family)
+      create(:spirely_invitation, family: family, expires_at: 10.days.ago, created_at: 20.days.ago)
+      create(:spirely_invitation, family: family, expires_at: 6.days.from_now, created_at: 1.day.ago)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "inactive" }, headers: auth_headers(admin)
+      expect(JSON.parse(response.body)["families"].first["invite_status"]).to eq("pending")
+    end
+
+    it "omits invite_status once an account is linked" do
+      church  = create(:church)
+      admin   = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      linked  = create(:account)
+      family  = create(:spirely_family, church: church, account: linked)
+      create(:spirely_child, family: family)
+      create(:spirely_invitation, family: family, expires_at: 6.days.from_now)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "inactive" }, headers: auth_headers(admin)
+      body = JSON.parse(response.body)["families"].first
+      expect(body["account_linked"]).to eq(true)
+      expect(body["invite_status"]).to be_nil
+    end
+
+    it "reports last_check_in_at as the most recent attendance across the primary contact and every child" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      family = create(:spirely_family, church: church, pco_person_id: "parent-1")
+      child  = create(:spirely_child, family: family, pco_person_id: "child-1")
+      parent_person = create(:spirely_person, church: church, pco_person_id: "parent-1")
+      child_person  = create(:spirely_person, church: church, pco_person_id: "child-1")
+      create(:spirely_attendance, person: parent_person, checked_in_at: 10.days.ago)
+      create(:spirely_attendance, person: child_person, checked_in_at: 2.days.ago)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "active" }, headers: auth_headers(admin)
+      body = JSON.parse(response.body)["families"].first
+      expect(Time.zone.parse(body["last_check_in_at"])).to be_within(1.minute).of(2.days.ago)
+    end
+
+    it "reports last_check_in_at as nil when nobody in the family has ever checked in" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      family = create(:spirely_family, church: church)
+      create(:spirely_child, family: family)
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families", params: { status: "inactive" }, headers: auth_headers(admin)
+      expect(JSON.parse(response.body)["families"].first["last_check_in_at"]).to be_nil
+    end
   end
 
   describe "POST /api/v1/admin/families" do

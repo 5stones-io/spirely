@@ -23,4 +23,6 @@ Rails.application.configure do
     port:    ENV.fetch("SMTP_PORT", 1025).to_i,
   }
   config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
+
+  config.active_storage.service = :local
 end

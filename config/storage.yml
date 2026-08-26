@@ -1,0 +1,12 @@
+test:
+  service: Disk
+  root: <%= Rails.root.join("tmp/storage") %>
+
+local:
+  service: Disk
+  root: <%= Rails.root.join("storage") %>
+
+# This repo is a gem, mounted into a real host app (spirely-cloud,
+# spirely-church) for production use — those apps own their own
+# production storage config. This file only needs to cover this repo's
+# own standalone/dummy test and local-dev runs.
