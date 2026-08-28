@@ -52,6 +52,13 @@ class Church < ApplicationRecord
   MAX_LOGO_SIZE = 2.megabytes
   ALLOWED_LOGO_TYPES = %w[image/png image/jpeg image/svg+xml image/webp].freeze
 
+  # How the app shell renders whatever's in `logo` — a church picks this
+  # in Settings alongside the upload itself. "circle"/"square" both crop
+  # to a fixed square (object-cover) at different corner roundedness;
+  # "rectangle" doesn't crop at all (object-contain, no forced aspect
+  # ratio) — for a wide wordmark-style logo a square crop would cut into.
+  LOGO_SHAPES = %w[circle square rectangle].freeze
+
   validate :logo_within_size_and_type_limits
 
   validates :slug, presence: true, uniqueness: true,
@@ -59,6 +66,7 @@ class Church < ApplicationRecord
   validates :name, presence: true
   validates :status, inclusion: { in: STATUSES }
   validates :public_site_theme, inclusion: { in: PUBLIC_SITE_THEMES }
+  validates :logo_shape, inclusion: { in: LOGO_SHAPES }
 
   def module_enabled?(name)
     enabled_modules.include?(name.to_s)

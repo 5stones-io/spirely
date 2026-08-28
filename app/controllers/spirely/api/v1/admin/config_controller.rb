@@ -19,6 +19,7 @@ module Spirely
               public_site_theme: Current.church.public_site_theme,
               display_name: Current.church.display_name,
               logo_url: logo_url,
+              logo_shape: Current.church.logo_shape,
             }
           end
 
@@ -39,6 +40,7 @@ module Spirely
             theme = attrs.delete(:public_site_theme)
             display_name = attrs.delete(:display_name)
             logo = attrs.delete(:logo)
+            logo_shape = attrs.delete(:logo_shape)
 
             if attrs[:pco_pat_app_id].present? || attrs[:pco_pat_secret].present?
               attrs = attrs.merge(token_type: "personal")
@@ -60,6 +62,7 @@ module Spirely
             church_attrs = {}
             church_attrs[:public_site_theme] = theme if theme.present?
             church_attrs[:display_name] = display_name if display_name_provided
+            church_attrs[:logo_shape] = logo_shape if logo_shape.present?
             if church_attrs.any?
               unless Current.church.update(church_attrs)
                 render json: { error: Current.church.errors.full_messages.first, code: "validation_error" },
@@ -89,6 +92,7 @@ module Spirely
                 public_site_theme: Current.church.public_site_theme,
                 display_name: Current.church.display_name,
                 logo_url: logo_url,
+                logo_shape: Current.church.logo_shape,
               }
             else
               render json: { error: integration.errors.full_messages.first, code: "validation_error" },
@@ -147,7 +151,7 @@ module Spirely
               :pco_client_id, :pco_client_secret,
               :pco_pat_app_id, :pco_pat_secret,
               :twilio_account_sid, :twilio_auth_token, :twilio_from_number,
-              :public_site_theme, :display_name, :logo
+              :public_site_theme, :display_name, :logo, :logo_shape
             )
           end
         end

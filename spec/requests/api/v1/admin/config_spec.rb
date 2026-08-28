@@ -18,6 +18,7 @@ RSpec.describe "Admin config API — branding", type: :request do
       body = JSON.parse(response.body)
       expect(body["display_name"]).to eq("Kids Nook")
       expect(body["logo_url"]).to be_nil
+      expect(body["logo_shape"]).to eq("circle")
     end
   end
 
@@ -78,6 +79,29 @@ RSpec.describe "Admin config API — branding", type: :request do
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(church.reload.logo).not_to be_attached
+    end
+
+    it "saves a new logo_shape" do
+      church = create(:church, logo_shape: "circle")
+      admin  = admin_for(church)
+
+      use_tenant_host!(church)
+      patch "/api/v1/admin/config", params: { config: { logo_shape: "rectangle" } }, headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:ok)
+      expect(church.reload.logo_shape).to eq("rectangle")
+      expect(JSON.parse(response.body)["logo_shape"]).to eq("rectangle")
+    end
+
+    it "rejects an unknown logo_shape" do
+      church = create(:church, logo_shape: "circle")
+      admin  = admin_for(church)
+
+      use_tenant_host!(church)
+      patch "/api/v1/admin/config", params: { config: { logo_shape: "hexagon" } }, headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(church.reload.logo_shape).to eq("circle")
     end
   end
 

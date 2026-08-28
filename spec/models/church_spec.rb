@@ -47,4 +47,22 @@ RSpec.describe Church do
       expect(church).to be_valid
     end
   end
+
+  describe "#logo_shape" do
+    it "defaults to circle" do
+      church = create(:church)
+      expect(church.logo_shape).to eq("circle")
+    end
+
+    it "accepts square and rectangle" do
+      expect(build(:church, logo_shape: "square")).to be_valid
+      expect(build(:church, logo_shape: "rectangle")).to be_valid
+    end
+
+    it "rejects an unknown shape" do
+      church = build(:church, logo_shape: "hexagon")
+      expect(church).not_to be_valid
+      expect(church.errors[:logo_shape]).to be_present
+    end
+  end
 end
