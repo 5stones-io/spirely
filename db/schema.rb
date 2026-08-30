@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_08_30_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_08_30_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -288,6 +288,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_30_000002) do
     t.uuid "recurrence_series_id"
     t.datetime "completed_at"
     t.datetime "next_occurrence_generated_at"
+    t.boolean "sync_to_pco", default: false, null: false
     t.index ["assignee_membership_id"], name: "index_spirely_tasks_on_assignee_membership_id"
     t.index ["church_id", "status"], name: "index_spirely_tasks_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_tasks_on_church_id"

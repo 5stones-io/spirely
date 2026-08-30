@@ -90,6 +90,16 @@ RSpec.describe "Admin Tasks API", type: :request do
       expect(body["created_by"]["id"]).to eq(admin_member.id)
     end
 
+    it "defaults sync_to_pco to false for a staff-created task" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+
+      use_tenant_host!(church)
+      post "/api/v1/admin/tasks", params: { task: { title: "Order VBS supplies" } }, headers: auth_headers(admin)
+      expect(JSON.parse(response.body)["sync_to_pco"]).to eq(false)
+    end
+
     it "requires a title" do
       church = create(:church)
       admin  = create(:account)

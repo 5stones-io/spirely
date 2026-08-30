@@ -70,7 +70,7 @@ module Spirely
           def task_params
             params.require(:task).permit(
               :title, :description, :status, :due_date, :assignee_membership_id,
-              :recurrence_rule, :recurrence_interval, :recurrence_mode
+              :recurrence_rule, :recurrence_interval, :recurrence_mode, :sync_to_pco
             )
           end
 
@@ -87,6 +87,7 @@ module Spirely
               recurrence_interval: task.recurrence_interval,
               recurrence_mode:     task.recurrence_mode,
               recurrence_series_id: task.recurrence_series_id,
+              sync_to_pco: task.sync_to_pco,
               completed_at: task.completed_at,
               created_at:  task.created_at,
               updated_at:  task.updated_at,

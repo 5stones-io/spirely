@@ -57,6 +57,14 @@ RSpec.describe Spirely::TaskRecurrenceGenerator do
       expect(next_task.created_by_membership_id).to eq(membership.id)
     end
 
+    it "carries sync_to_pco forward, not derived fresh" do
+      task = create(:spirely_task, recurrence_rule: "daily", recurrence_mode: "absolute",
+                                    due_date: Date.current, sync_to_pco: true)
+
+      described_class.call(task)
+      expect(Spirely::Task.order(:id).last.sync_to_pco).to eq(true)
+    end
+
     it "assigns a shared recurrence_series_id across occurrences, generated once" do
       task = create(:spirely_task, recurrence_rule: "daily", recurrence_mode: "absolute", due_date: Date.current)
       expect(task.recurrence_series_id).to be_nil

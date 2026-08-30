@@ -51,6 +51,14 @@ RSpec.describe Spirely::Task, type: :model do
     it "defaults recurrence_rule to none" do
       expect(create(:spirely_task).recurrence_rule).to eq("none")
     end
+
+    it "defaults sync_to_pco to false — the only creation path today is Spirely-native" do
+      expect(create(:spirely_task).sync_to_pco).to eq(false)
+    end
+
+    it "allows explicitly setting sync_to_pco true, for a future PCO-originated task" do
+      expect(create(:spirely_task, sync_to_pco: true).sync_to_pco).to eq(true)
+    end
   end
 
   describe "#complete?" do
