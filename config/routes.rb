@@ -63,6 +63,7 @@ Spirely::Engine.routes.draw do
         end
         resource  :staff, only: [:show], controller: "staff"
         resources :staff_invitations, only: [:create]
+        resources :tasks, only: [:index, :show, :create, :update, :destroy]
       end
 
       resources :invitations, only: [:show], param: :token do

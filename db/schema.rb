@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_08_28_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_08_30_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -272,6 +272,21 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_28_000001) do
     t.index ["church_id"], name: "index_spirely_sync_settings_on_church_id", unique: true
   end
 
+  create_table "spirely_tasks", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "title", null: false
+    t.text "description"
+    t.string "status", default: "not_started", null: false
+    t.date "due_date"
+    t.bigint "assignee_membership_id"
+    t.bigint "created_by_membership_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assignee_membership_id"], name: "index_spirely_tasks_on_assignee_membership_id"
+    t.index ["church_id", "status"], name: "index_spirely_tasks_on_church_id_and_status"
+    t.index ["church_id"], name: "index_spirely_tasks_on_church_id"
+  end
+
   add_foreign_key "account_email_auth_keys", "accounts", column: "id"
   add_foreign_key "account_lockouts", "accounts", column: "id"
   add_foreign_key "account_login_failures", "accounts", column: "id"
@@ -295,4 +310,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_28_000001) do
   add_foreign_key "spirely_people", "churches"
   add_foreign_key "spirely_staff_invitations", "churches"
   add_foreign_key "spirely_sync_settings", "churches"
+  add_foreign_key "spirely_tasks", "churches"
+  add_foreign_key "spirely_tasks", "memberships", column: "assignee_membership_id", on_delete: :nullify
+  add_foreign_key "spirely_tasks", "memberships", column: "created_by_membership_id", on_delete: :nullify
 end
