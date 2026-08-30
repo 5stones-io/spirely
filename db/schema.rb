@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_08_30_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_08_30_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -282,9 +282,18 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_30_000001) do
     t.bigint "created_by_membership_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "recurrence_rule", default: "none", null: false
+    t.integer "recurrence_interval"
+    t.string "recurrence_mode"
+    t.uuid "recurrence_series_id"
+    t.datetime "completed_at"
+    t.datetime "next_occurrence_generated_at"
+    t.boolean "sync_to_pco", default: false, null: false
     t.index ["assignee_membership_id"], name: "index_spirely_tasks_on_assignee_membership_id"
     t.index ["church_id", "status"], name: "index_spirely_tasks_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_tasks_on_church_id"
+    t.index ["recurrence_mode", "next_occurrence_generated_at", "due_date"], name: "index_spirely_tasks_on_absolute_recurrence_sweep"
+    t.index ["recurrence_series_id"], name: "index_spirely_tasks_on_recurrence_series_id"
   end
 
   add_foreign_key "account_email_auth_keys", "accounts", column: "id"
