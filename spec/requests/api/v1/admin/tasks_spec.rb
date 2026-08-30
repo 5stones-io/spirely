@@ -115,6 +115,61 @@ RSpec.describe "Admin Tasks API", type: :request do
       expect(task.reload.status).to eq("complete")
     end
 
+    it "sets a recurrence rule" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      task = create(:spirely_task, church: church)
+
+      use_tenant_host!(church)
+      patch "/api/v1/admin/tasks/#{task.id}",
+            params: { task: { recurrence_rule: "every_n_days", recurrence_mode: "relative", recurrence_interval: 3 } },
+            headers: auth_headers(admin)
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["recurrence_rule"]).to eq("every_n_days")
+      expect(body["recurrence_mode"]).to eq("relative")
+      expect(body["recurrence_interval"]).to eq(3)
+    end
+
+    it "generates the next occurrence when a relative-recurrence task is marked complete" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      task = create(:spirely_task, church: church, recurrence_rule: "weekly", recurrence_mode: "relative", status: "not_started")
+
+      use_tenant_host!(church)
+      expect {
+        patch "/api/v1/admin/tasks/#{task.id}", params: { task: { status: "complete" } }, headers: auth_headers(admin)
+      }.to change(Spirely::Task, :count).by(1)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "does not generate a next occurrence when an absolute-recurrence task is marked complete" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      task = create(:spirely_task, church: church, recurrence_rule: "weekly", recurrence_mode: "absolute",
+                                    due_date: 1.week.from_now.to_date, status: "not_started")
+
+      use_tenant_host!(church)
+      expect {
+        patch "/api/v1/admin/tasks/#{task.id}", params: { task: { status: "complete" } }, headers: auth_headers(admin)
+      }.not_to change(Spirely::Task, :count)
+    end
+
+    it "does not regenerate on an unrelated update to an already-complete recurring task" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      task = create(:spirely_task, church: church, recurrence_rule: "weekly", recurrence_mode: "relative", status: "complete")
+
+      use_tenant_host!(church)
+      expect {
+        patch "/api/v1/admin/tasks/#{task.id}", params: { task: { description: "note" } }, headers: auth_headers(admin)
+      }.not_to change(Spirely::Task, :count)
+    end
+
     it "reassigns to a different staff membership" do
       church        = create(:church)
       admin         = create(:account)
