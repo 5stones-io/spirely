@@ -37,6 +37,7 @@ Spirely::Engine.routes.draw do
 
       resource  :family,   only: [:show, :update]
       resources :children, only: [:index, :create, :update, :destroy]
+      resources :family_posts, only: [:index, :show, :create, :update, :destroy]
 
       resource  :sync_settings, only: [:show, :update]
       post "/sync/trigger", to: "sync#trigger"
@@ -64,6 +65,10 @@ Spirely::Engine.routes.draw do
         resource  :staff, only: [:show], controller: "staff"
         resources :staff_invitations, only: [:create]
         resources :tasks, only: [:index, :show, :create, :update, :destroy]
+        resources :family_posts, only: [:index, :show, :destroy] do
+          post :approve, on: :member
+          post :reject, on: :member
+        end
       end
 
       resources :invitations, only: [:show], param: :token do

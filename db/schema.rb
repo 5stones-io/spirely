@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_08_30_000003) do
+ActiveRecord::Schema[7.2].define(version: 2026_08_31_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -81,6 +81,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_30_000003) do
     t.datetime "updated_at", null: false
     t.string "display_name"
     t.string "logo_shape", default: "circle", null: false
+    t.boolean "family_posts_moderation_enabled", default: false, null: false
     t.index ["slug"], name: "index_churches_on_slug", unique: true
   end
 
@@ -188,6 +189,26 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_30_000003) do
     t.index ["email"], name: "index_spirely_families_on_email"
     t.index ["pco_household_id"], name: "index_spirely_families_on_pco_household_id"
     t.index ["pco_person_id"], name: "index_spirely_families_on_pco_person_id"
+  end
+
+  create_table "spirely_family_posts", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "family_id", null: false
+    t.bigint "guardian_id"
+    t.bigint "child_id"
+    t.string "post_type", default: "prayer_request", null: false
+    t.string "audience", default: "church", null: false
+    t.string "status", null: false
+    t.text "body", null: false
+    t.text "rejected_reason"
+    t.bigint "moderated_by_membership_id"
+    t.datetime "moderated_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "audience", "status"], name: "idx_on_church_id_audience_status_b706e82226"
+    t.index ["church_id", "status"], name: "index_spirely_family_posts_on_church_id_and_status"
+    t.index ["church_id"], name: "index_spirely_family_posts_on_church_id"
+    t.index ["family_id"], name: "index_spirely_family_posts_on_family_id"
   end
 
   create_table "spirely_guardians", force: :cascade do |t|
@@ -311,6 +332,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_30_000003) do
   add_foreign_key "spirely_church_integrations", "churches"
   add_foreign_key "spirely_families", "accounts", on_delete: :nullify
   add_foreign_key "spirely_families", "churches"
+  add_foreign_key "spirely_family_posts", "churches"
+  add_foreign_key "spirely_family_posts", "memberships", column: "moderated_by_membership_id", on_delete: :nullify
+  add_foreign_key "spirely_family_posts", "spirely_children", column: "child_id", on_delete: :nullify
+  add_foreign_key "spirely_family_posts", "spirely_families", column: "family_id"
+  add_foreign_key "spirely_family_posts", "spirely_guardians", column: "guardian_id", on_delete: :nullify
   add_foreign_key "spirely_guardians", "churches"
   add_foreign_key "spirely_guardians", "spirely_families", column: "family_id"
   add_foreign_key "spirely_invitations", "churches"
