@@ -6,6 +6,7 @@ module Spirely
     has_many :guardians,    dependent: :destroy
     has_many :invitations,  dependent: :destroy
     has_many :contact_notes, class_name: "Spirely::ContactNote", dependent: :destroy
+    has_many :family_posts, class_name: "Spirely::FamilyPost", dependent: :destroy
 
     validates :email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
     validates :account_id, uniqueness: { scope: :church_id }, allow_nil: true

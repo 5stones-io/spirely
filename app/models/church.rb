@@ -40,6 +40,7 @@ class Church < ApplicationRecord
   has_many :pco_data_error_statuses, class_name: "Spirely::PcoDataErrorStatus", dependent: :destroy
   has_many :registration_statuses, class_name: "Spirely::RegistrationStatus", dependent: :destroy
   has_many :tasks, class_name: "Spirely::Task", dependent: :destroy
+  has_many :family_posts, class_name: "Spirely::FamilyPost", dependent: :destroy
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy
   has_one  :sync_setting, class_name: "Spirely::SyncSetting", dependent: :destroy
 
