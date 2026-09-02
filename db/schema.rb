@@ -38,6 +38,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
     t.integer "status_id", default: 2, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "first_name"
+    t.string "last_name"
     t.index ["email"], name: "index_accounts_on_email", unique: true, where: "(status_id <> 3)"
   end
 

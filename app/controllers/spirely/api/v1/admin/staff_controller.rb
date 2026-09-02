@@ -17,7 +17,7 @@ module Spirely
 
             render json: {
               members: members.map { |m|
-                { id: m.id, email: m.account.email, role: m.role, since: m.created_at }
+                { id: m.id, email: m.account.email, name: m.account.name, role: m.role, since: m.created_at }
               },
               pending_invitations: invitations.map { |i|
                 { id: i.id, first_name: i.invited_first_name, last_name: i.invited_last_name,

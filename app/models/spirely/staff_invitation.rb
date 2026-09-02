@@ -36,6 +36,13 @@ module Spirely
       membership = Membership.find_or_initialize_by(account_id: account_id, church_id: church_id)
       membership.role = "admin" unless membership.persisted? && membership.role.in?(%w[admin owner])
       membership.save!
+
+      # Only fills in a still-blank name — never overwrites a name an
+      # existing account already has (e.g. someone with a prior Membership
+      # elsewhere, or accepting a second invite).
+      account = membership.account
+      account.update!(first_name: invited_first_name) if account.first_name.blank? && invited_first_name.present?
+
       update!(accepted_at: Time.current)
     end
 

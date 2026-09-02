@@ -80,7 +80,7 @@ module Spirely
               author_name: post.guardian ? "#{post.guardian.first_name} #{post.guardian.last_name}".strip : post.family.primary_contact_name,
               rejected_reason: post.rejected_reason,
               moderated_at: post.moderated_at,
-              moderated_by: post.moderated_by && { id: post.moderated_by.id, email: post.moderated_by.account.email },
+              moderated_by: post.moderated_by && { id: post.moderated_by.id, email: post.moderated_by.account.email, name: post.moderated_by.account.name },
               created_at:  post.created_at,
               updated_at:  post.updated_at,
             }
