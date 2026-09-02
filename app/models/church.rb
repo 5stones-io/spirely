@@ -32,6 +32,7 @@ class Church < ApplicationRecord
   has_many :people, class_name: "Spirely::Person", dependent: :destroy
   has_many :volunteer_profiles, class_name: "Spirely::VolunteerProfile", dependent: :destroy
   has_many :attendances, class_name: "Spirely::Attendance", dependent: :destroy
+  has_many :locations, class_name: "Spirely::Location", dependent: :destroy
   has_many :attendance_nudges, class_name: "Spirely::AttendanceNudge", dependent: :destroy
   has_many :contact_notes, class_name: "Spirely::ContactNote", dependent: :destroy
   has_many :events, class_name: "Spirely::Event", dependent: :destroy

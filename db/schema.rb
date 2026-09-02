@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_02_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -124,7 +124,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
     t.text "medical_notes"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "location_id"
     t.index ["church_id", "pco_check_in_id"], name: "index_spirely_attendances_on_church_id_and_pco_check_in_id", unique: true
+    t.index ["location_id"], name: "index_spirely_attendances_on_location_id"
     t.index ["person_id", "pco_event_id", "checked_in_at"], name: "index_attendances_on_person_event_checkin"
   end
 
@@ -246,6 +248,15 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
     t.index ["token"], name: "index_spirely_invitations_on_token", unique: true
   end
 
+  create_table "spirely_locations", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "pco_location_id", null: false
+    t.string "name", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_location_id"], name: "index_spirely_locations_on_church_id_and_pco_location_id", unique: true
+  end
+
   create_table "spirely_people", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.string "pco_person_id", null: false
@@ -329,6 +340,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
   add_foreign_key "memberships", "accounts"
   add_foreign_key "memberships", "churches"
   add_foreign_key "spirely_attendances", "churches"
+  add_foreign_key "spirely_attendances", "spirely_locations", column: "location_id"
   add_foreign_key "spirely_attendances", "spirely_people", column: "person_id"
   add_foreign_key "spirely_children", "churches"
   add_foreign_key "spirely_children", "spirely_families", column: "family_id"
@@ -345,6 +357,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
   add_foreign_key "spirely_invitations", "churches"
   add_foreign_key "spirely_invitations", "spirely_families", column: "family_id"
   add_foreign_key "spirely_invitations", "spirely_guardians", column: "guardian_id"
+  add_foreign_key "spirely_locations", "churches"
   add_foreign_key "spirely_people", "churches"
   add_foreign_key "spirely_staff_invitations", "churches"
   add_foreign_key "spirely_sync_settings", "churches"
