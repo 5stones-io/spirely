@@ -4,6 +4,7 @@ module Spirely
 
     belongs_to :church
     belongs_to :person, class_name: "Spirely::Person"
+    belongs_to :location, class_name: "Spirely::Location", optional: true
 
     before_validation :inherit_church_from_person
 

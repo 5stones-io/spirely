@@ -30,7 +30,7 @@ module Spirely
       event_periods   = index_by_id(included, "EventPeriod")
       events          = resolve_events(client, event_periods)
       check_in_times  = index_by_check_in_id(included)
-      locations       = resolve_locations(client)
+      locations       = sync_locations(church, client)
 
       check_ins.each { |ci| sync_check_in(church, ci, people, event_periods, events, check_in_times, locations) }
 
@@ -60,8 +60,19 @@ module Spirely
     # is small (dozens, not thousands) and slow-changing, so fetching all
     # of them once per sync via get_all and indexing locally is simpler
     # and more correct than trying to make the filter work.
-    def resolve_locations(client)
-      index_by_id(client.get_all("/check-ins/v2/locations"), "Location")
+    #
+    # Persists each as a real Spirely::Location row (not just an in-memory
+    # hash) so room-scoped features (announcements, etc.) can reference a
+    # stable id instead of matching on PCO's free-text name - see 5ST-37.
+    # Returns pco_location_id => Spirely::Location, same shape callers
+    # already expect from the old hash-of-PCO-attrs version.
+    def sync_locations(church, client)
+      index_by_id(client.get_all("/check-ins/v2/locations"), "Location").transform_values do |pco_location|
+        location = church.locations.find_or_initialize_by(pco_location_id: pco_location["id"])
+        location.name = pco_location.dig("attributes", "name")
+        location.save! if location.new_record? || location.changed?
+        location
+      end
     end
 
     # CheckInTime isn't directly embedded on CheckIn - it's a separate
@@ -87,7 +98,8 @@ module Spirely
       person = sync_person(church, people[pco_person_id])
       return unless person
 
-      location_id = check_in_times.dig(check_in["id"], "relationships", "location", "data", "id")
+      pco_location_id = check_in_times.dig(check_in["id"], "relationships", "location", "data", "id")
+      location        = locations[pco_location_id]
 
       attendance = church.attendances.find_or_initialize_by(pco_check_in_id: check_in["id"])
       attendance.assign_attributes(
@@ -97,8 +109,9 @@ module Spirely
         checked_in_at:  attrs["created_at"],
         checked_out_at: attrs["checked_out_at"],
         medical_notes:  attrs["medical_notes"],
-        pco_location_id: location_id,
-        location_name:   locations.dig(location_id, "attributes", "name"),
+        pco_location_id: pco_location_id,
+        location:        location,
+        location_name:   location&.name,
         # PCO's real API returns Title Case ("Regular", "Volunteer"), not
         # the lowercase this app's own Attendance::KINDS enum uses —
         # confirmed directly against production data (every real check-in
