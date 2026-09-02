@@ -5,7 +5,7 @@ module Spirely
         class StaffInvitationsController < BaseController
           before_action :require_admin!
 
-          # POST /api/v1/admin/staff_invitations { first_name:, email:, phone: }
+          # POST /api/v1/admin/staff_invitations { first_name:, last_name:, email:, phone: }
           def create
             if params[:email].blank? && params[:phone].blank?
               render json: { error: "An email or phone number is required", code: "validation_error" },
@@ -23,6 +23,7 @@ module Spirely
 
             invitation = Current.church.staff_invitations.create!(
               invited_first_name: params[:first_name],
+              invited_last_name:  params[:last_name],
               invited_email:      params[:email],
               invited_phone:      params[:phone]
             )
