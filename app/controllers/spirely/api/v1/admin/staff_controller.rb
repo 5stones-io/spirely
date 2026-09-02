@@ -20,8 +20,9 @@ module Spirely
                 { id: m.id, email: m.account.email, role: m.role, since: m.created_at }
               },
               pending_invitations: invitations.map { |i|
-                { id: i.id, first_name: i.invited_first_name, email: i.invited_email,
-                  phone: i.invited_phone, expires_at: i.expires_at, created_at: i.created_at }
+                { id: i.id, first_name: i.invited_first_name, last_name: i.invited_last_name,
+                  email: i.invited_email, phone: i.invited_phone, expires_at: i.expires_at,
+                  created_at: i.created_at }
               },
             }
           end

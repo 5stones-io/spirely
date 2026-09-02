@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_08_31_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_09_01_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -271,6 +271,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_08_31_000002) do
     t.datetime "accepted_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "invited_last_name"
     t.index ["church_id"], name: "index_spirely_staff_invitations_on_church_id"
     t.index ["token"], name: "index_spirely_staff_invitations_on_token", unique: true
   end
