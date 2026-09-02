@@ -10,6 +10,13 @@ module Spirely
         def show
           render json: {
             email: Current.account.email,
+            # Threaded through for the Profile page (5ST-42) — falls back to
+            # email client-side same as every other name display since this
+            # is blank for a pending invite's not-yet-accepted account (see
+            # Account#name).
+            name: Current.account.name,
+            phone: Current.account.phone,
+            church_name: Current.church.name,
             role: role,
             # Staff-only "preview as" switcher (Landing.tsx) — lets a real
             # staff account click through the Volunteer/Parent screens for
