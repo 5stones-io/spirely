@@ -6,6 +6,15 @@ class Account < ApplicationRecord
 
   before_validation :normalize_email
 
+  # Blank, not just for accounts created before first_name/last_name
+  # existed (every owner Account provisioned via ChurchProvisioner, every
+  # invite accepted before this field shipped) but also for a currently-
+  # pending invite whose invitee hasn't accepted yet — callers should fall
+  # back to email whenever this is blank rather than showing "".
+  def name
+    [first_name, last_name].compact_blank.join(" ").presence
+  end
+
   private
 
   # Every account-by-login lookup (RodauthMain#account_from_login) does a
