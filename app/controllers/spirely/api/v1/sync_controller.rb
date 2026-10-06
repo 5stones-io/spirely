@@ -34,6 +34,14 @@ module Spirely
           if Current.church.church_integration&.pco_connected?
             Spirely::PcoAttendanceSyncJob.perform_later(Current.church.id)
             enqueued << "attendance"
+
+            # All-time per-person check-in stats — a full paged pass, so
+            # not something the mid-service attendance-only button
+            # should wait behind.
+            unless attendance_only
+              Spirely::PcoCheckInStatsSyncJob.perform_later(Current.church.id)
+              enqueued << "check_in_stats"
+            end
           end
 
           render json: { status: "started", enqueued: enqueued, timestamp: Time.current.iso8601 }

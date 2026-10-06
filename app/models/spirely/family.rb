@@ -19,26 +19,45 @@ module Spirely
     scope :with_children, -> { joins(:children).distinct }
 
     # "Active" here means real PCO attendance history, same sense PCO
-    # itself uses — someone in the family (a child, or the primary
-    # contact) has actually checked in within the window — not whether
-    # they have kids on file or a claimed account (see with_children /
-    # account_linked, which are separate, boolean concerns). Matched via
-    # the same shared-pco_person_id bridge Child#person/Family#person
-    # already use, not a real FK, since Person is synced independently.
+    # itself uses — someone in the household (the primary contact, a
+    # child, or another guardian) has actually checked in within the
+    # window — not whether they have kids on file or a claimed account
+    # (see with_children / account_linked, which are separate, boolean
+    # concerns). Matched via the same shared-pco_person_id bridge
+    # Child#person/Family#person already use, not a real FK, since Person
+    # is synced independently.
+    #
+    # Reads PCO's own all-time Person#last_checked_in_at first — local
+    # Attendance rows only cover PcoAttendanceSyncJob's rolling 16-week
+    # window, far short of this 1-year one — with Attendance kept as a
+    # fallback until PcoCheckInStatsSyncJob has run. Guardians count too:
+    # PCO sometimes flags a real kid "Adult", which files them as a
+    # Guardian rather than a Child (see PcoInboundPeopleSyncJob).
     ATTENDANCE_ACTIVE_WINDOW = 1.year
 
     RECENT_ATTENDANCE_SQL = <<~SQL.squish
       EXISTS (
         SELECT 1 FROM spirely_people people
-        INNER JOIN spirely_attendances attendances ON attendances.person_id = people.id
         WHERE people.church_id = spirely_families.church_id
-          AND attendances.checked_in_at >= :since
+          AND (
+            people.last_checked_in_at >= :since
+            OR EXISTS (
+              SELECT 1 FROM spirely_attendances attendances
+              WHERE attendances.person_id = people.id
+                AND attendances.checked_in_at >= :since
+            )
+          )
           AND (
             people.pco_person_id = spirely_families.pco_person_id
             OR EXISTS (
               SELECT 1 FROM spirely_children children
               WHERE children.family_id = spirely_families.id
                 AND children.pco_person_id = people.pco_person_id
+            )
+            OR EXISTS (
+              SELECT 1 FROM spirely_guardians guardians
+              WHERE guardians.family_id = spirely_families.id
+                AND guardians.pco_person_id = people.pco_person_id
             )
           )
       )
