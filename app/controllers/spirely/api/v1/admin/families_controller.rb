@@ -182,26 +182,32 @@ module Spirely
             }
           end
 
-          # {pco_person_id => most recent checked_in_at} across every
-          # Person this church has ever recorded attendance for, in one
+          # {pco_person_id => most recent check-in} for this church, in one
           # query — Family/Child#person's own `find_by` join is exactly
           # right for a single record, but would be an N+1 across a
-          # 50-row page.
+          # 50-row page. PCO's all-time Person#last_checked_in_at wins
+          # over local Attendance (only a rolling 16-week window — the
+          # reason "Never checked in" used to be wrong for anyone who
+          # hadn't been in since then); Attendance stays as a fallback
+          # until PcoCheckInStatsSyncJob has filled that column in.
+          # GREATEST skips NULLs, so either side alone is enough.
           def last_check_in_by_pco_person_id_hash
             Spirely::Person.where(church: Current.church)
-                            .joins(:attendances)
+                            .left_joins(:attendances)
                             .group(:pco_person_id)
-                            .maximum(:checked_in_at)
+                            .pluck(:pco_person_id, Arel.sql("GREATEST(MAX(spirely_people.last_checked_in_at), MAX(spirely_attendances.checked_in_at))"))
+                            .to_h
+                            .compact
           end
 
           # A family's own last check-in is the most recent across the
-          # primary contact AND every child — mirrors
-          # NewFamilyNudgeCalculator#earliest_attendance_for's same
-          # "look at family.person and every child's person" shape, just
-          # latest instead of earliest, and reading the batched hash
-          # above instead of a live query per family.
+          # whole household — primary contact, every child, and every
+          # other guardian (PCO sometimes flags a real kid "Adult", which
+          # files them as a Guardian — see Family::RECENT_ATTENDANCE_SQL)
+          # — reading the batched hash above instead of a live query per
+          # family.
           def last_check_in_for(family, lookup)
-            pco_ids = [family.pco_person_id, *family.children.map(&:pco_person_id)].compact
+            pco_ids = [family.pco_person_id, *family.children.map(&:pco_person_id), *family.guardians.map(&:pco_person_id)].compact
             pco_ids.filter_map { |id| lookup[id] }.max
           end
 

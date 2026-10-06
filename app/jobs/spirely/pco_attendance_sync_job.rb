@@ -145,6 +145,10 @@ module Spirely
         # birthdate over PCO's own flag when the two disagree.
         child:      attrs["child"] || likely_a_minor?(attrs["birthdate"]),
         birthdate:  attrs["birthdate"],
+        # PCO's all-time stats, already in this same included payload —
+        # see PcoCheckInStatsSyncJob for everyone outside this window.
+        last_checked_in_at: attrs["last_checked_in_at"],
+        check_in_count:     attrs["check_in_count"],
         pco_last_synced_at: Time.current
       )
       person.save! if person.new_record? || person.changed?
