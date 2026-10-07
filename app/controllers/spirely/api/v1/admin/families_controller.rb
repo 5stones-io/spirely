@@ -59,7 +59,7 @@ module Spirely
 
           # GET /api/v1/admin/families/:id
           def show
-            family = Current.church.families.includes(:children, :guardians, :account).find(params[:id])
+            family = Current.church.families.includes({ children: :ministry_interests_updated_by }, :guardians, :account).find(params[:id])
             # guardian_id: nil scopes this to the family's own primary-
             # contact invite specifically — a guardian-scoped invite
             # (multi-account family access) also belongs_to :family, so
@@ -85,7 +85,11 @@ module Spirely
               children:   family.children.map { |c|
                 { id: c.id, first_name: c.first_name, last_name: c.last_name,
                   grade_display: c.grade_display, age: c.age, notes: c.notes,
-                  allergy_summary: c.allergy_summary, allergy_updated_at: c.allergy_updated_at }
+                  allergy_summary: c.allergy_summary, allergy_updated_at: c.allergy_updated_at,
+                  ministry_interests: c.ministry_interests,
+                  ministry_interests_updated_at: c.ministry_interests_updated_at,
+                  ministry_interests_updated_by_name: c.ministry_interests_updated_by_name,
+                  ministry_interests_updated_by_role: c.ministry_interests_updated_by_role }
               },
               guardians:  family.guardians.map { |g|
                 { id: g.id, first_name: g.first_name, last_name: g.last_name,

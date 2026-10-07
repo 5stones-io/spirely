@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_09_02_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_07_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -146,8 +146,13 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_02_000002) do
     t.datetime "allergy_updated_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "ministry_interests", default: [], null: false, array: true
+    t.datetime "ministry_interests_updated_at"
+    t.bigint "ministry_interests_updated_by_id"
+    t.string "ministry_interests_updated_by_role"
     t.index ["church_id"], name: "index_spirely_children_on_church_id"
     t.index ["family_id"], name: "index_spirely_children_on_family_id"
+    t.index ["ministry_interests_updated_by_id"], name: "index_spirely_children_on_ministry_interests_updated_by_id"
     t.index ["pco_person_id"], name: "index_spirely_children_on_pco_person_id"
     t.index ["public_id"], name: "index_spirely_children_on_public_id", unique: true
   end
@@ -271,6 +276,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_02_000002) do
     t.datetime "assessment_synced_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "last_checked_in_at"
+    t.integer "check_in_count"
     t.index ["church_id", "pco_person_id"], name: "index_spirely_people_on_church_id_and_pco_person_id", unique: true
   end
 
@@ -342,6 +349,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_09_02_000002) do
   add_foreign_key "spirely_attendances", "churches"
   add_foreign_key "spirely_attendances", "spirely_locations", column: "location_id"
   add_foreign_key "spirely_attendances", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_children", "accounts", column: "ministry_interests_updated_by_id", on_delete: :nullify
   add_foreign_key "spirely_children", "churches"
   add_foreign_key "spirely_children", "spirely_families", column: "family_id"
   add_foreign_key "spirely_church_integrations", "churches"
