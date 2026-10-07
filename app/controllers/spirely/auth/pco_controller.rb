@@ -36,7 +36,9 @@ module Spirely
           client_id:     integration.pco_client_id,
           redirect_uri:  pco_callback_url,
           response_type: "code",
-          scope:         "people check_ins calendar services",
+          # groups: Small Groups module (read-only Groups sync). Churches
+          # that connected before this was added must reconnect to grant it.
+          scope:         "people check_ins calendar services groups",
           state:         Current.church.id
         }
         redirect_to "#{PCO_AUTH_URL}?#{auth_params.to_query}", allow_other_host: true

@@ -27,20 +27,40 @@ module Spirely
             # and on admin? here so a non-staff account is never told it
             # exists even if the church has it enabled.
             role_preview_enabled: admin? && Current.church.role_preview_enabled?,
+            # Which ministry modules this church has on (Church::MODULES) —
+            # the frontend gates navigation and screens on this.
+            enabled_modules: Current.church.enabled_modules,
+            # Every role this account holds here, not just the single
+            # highest-priority `role` above — e.g. an admin who's also a
+            # parent gets ["staff", "parent"]. `role` still decides the
+            # landing page; this lets other screens offer extra entry
+            # points (e.g. Small Groups' "My Groups").
+            capabilities: capabilities,
           }
         end
 
         private
 
-        # Priority order: Staff > Volunteer > Parent. An account could
-        # technically match more than one (e.g. an admin who's also a
-        # parent) — staff wins as the most privileged, real signal.
+        # Priority order: Staff > Volunteer > Parent. An account can match
+        # more than one (e.g. an admin who's also a parent) — staff wins as
+        # the most privileged, real signal. nil when none apply.
         def role
           return "staff" if admin?
           return "volunteer" if volunteer?
           return "parent" if Current.membership&.role == "family"
 
           nil
+        end
+
+        # Same priority order as `role`. "parent" here also covers an
+        # account that has a family (own or as a guardian) but whose one
+        # Membership row is admin — `role` can't express that, this can.
+        def capabilities
+          @capabilities ||= [
+            ("staff" if admin?),
+            ("volunteer" if volunteer?),
+            ("parent" if Current.membership&.role == "family" || current_family),
+          ].compact
         end
       end
     end
