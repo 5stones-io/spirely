@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_07_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_07_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -220,6 +220,104 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_07_000001) do
     t.index ["family_id"], name: "index_spirely_family_posts_on_family_id"
   end
 
+  create_table "spirely_group_applications", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_id", null: false
+    t.bigint "person_id", null: false
+    t.string "pco_application_id", null: false
+    t.string "status", null: false
+    t.datetime "applied_at"
+    t.text "message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_application_id"], name: "idx_on_church_id_pco_application_id_6fd0183e79", unique: true
+    t.index ["church_id"], name: "index_spirely_group_applications_on_church_id"
+    t.index ["group_id"], name: "index_spirely_group_applications_on_group_id"
+    t.index ["person_id"], name: "index_spirely_group_applications_on_person_id"
+  end
+
+  create_table "spirely_group_attendances", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_event_id", null: false
+    t.bigint "person_id", null: false
+    t.boolean "attended", default: false, null: false
+    t.string "role"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id"], name: "index_spirely_group_attendances_on_church_id"
+    t.index ["group_event_id", "person_id"], name: "idx_on_group_event_id_person_id_74e3622495", unique: true
+    t.index ["group_event_id"], name: "index_spirely_group_attendances_on_group_event_id"
+    t.index ["person_id"], name: "index_spirely_group_attendances_on_person_id"
+  end
+
+  create_table "spirely_group_events", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_id", null: false
+    t.string "pco_event_id", null: false
+    t.string "name"
+    t.datetime "starts_at", null: false
+    t.datetime "ends_at"
+    t.boolean "canceled", default: false, null: false
+    t.datetime "removed_at"
+    t.datetime "attendance_synced_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_event_id"], name: "index_spirely_group_events_on_church_id_and_pco_event_id", unique: true
+    t.index ["church_id"], name: "index_spirely_group_events_on_church_id"
+    t.index ["group_id", "starts_at"], name: "index_spirely_group_events_on_group_id_and_starts_at"
+    t.index ["group_id"], name: "index_spirely_group_events_on_group_id"
+  end
+
+  create_table "spirely_group_memberships", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_id", null: false
+    t.bigint "person_id", null: false
+    t.string "pco_membership_id", null: false
+    t.string "role", default: "member", null: false
+    t.datetime "joined_at"
+    t.datetime "left_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_membership_id"], name: "idx_on_church_id_pco_membership_id_ed14445c1f", unique: true
+    t.index ["church_id"], name: "index_spirely_group_memberships_on_church_id"
+    t.index ["group_id"], name: "index_spirely_group_memberships_on_group_id"
+    t.index ["person_id"], name: "index_spirely_group_memberships_on_person_id"
+  end
+
+  create_table "spirely_group_types", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "pco_group_type_id", null: false
+    t.string "name", null: false
+    t.string "color"
+    t.string "audience", default: "adults", null: false
+    t.datetime "removed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_group_type_id"], name: "index_spirely_group_types_on_church_id_and_pco_group_type_id", unique: true
+    t.index ["church_id"], name: "index_spirely_group_types_on_church_id"
+  end
+
+  create_table "spirely_groups", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_type_id"
+    t.string "pco_group_id", null: false
+    t.string "name", null: false
+    t.text "description"
+    t.string "schedule_text"
+    t.string "location_name"
+    t.string "location_address"
+    t.integer "memberships_count"
+    t.string "church_center_url"
+    t.datetime "archived_at"
+    t.datetime "removed_at"
+    t.datetime "pco_last_synced_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_group_id"], name: "index_spirely_groups_on_church_id_and_pco_group_id", unique: true
+    t.index ["church_id"], name: "index_spirely_groups_on_church_id"
+    t.index ["group_type_id"], name: "index_spirely_groups_on_group_type_id"
+  end
+
   create_table "spirely_guardians", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.bigint "family_id", null: false
@@ -311,6 +409,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_07_000001) do
     t.string "pco_assessment_field_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "groups_last_synced_at"
+    t.datetime "groups_access_denied_at"
     t.index ["church_id"], name: "index_spirely_sync_settings_on_church_id", unique: true
   end
 
@@ -360,6 +460,20 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_07_000001) do
   add_foreign_key "spirely_family_posts", "spirely_children", column: "child_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_families", column: "family_id"
   add_foreign_key "spirely_family_posts", "spirely_guardians", column: "guardian_id", on_delete: :nullify
+  add_foreign_key "spirely_group_applications", "churches"
+  add_foreign_key "spirely_group_applications", "spirely_groups", column: "group_id"
+  add_foreign_key "spirely_group_applications", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_group_attendances", "churches"
+  add_foreign_key "spirely_group_attendances", "spirely_group_events", column: "group_event_id"
+  add_foreign_key "spirely_group_attendances", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_group_events", "churches"
+  add_foreign_key "spirely_group_events", "spirely_groups", column: "group_id"
+  add_foreign_key "spirely_group_memberships", "churches"
+  add_foreign_key "spirely_group_memberships", "spirely_groups", column: "group_id"
+  add_foreign_key "spirely_group_memberships", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_group_types", "churches"
+  add_foreign_key "spirely_groups", "churches"
+  add_foreign_key "spirely_groups", "spirely_group_types", column: "group_type_id"
   add_foreign_key "spirely_guardians", "churches"
   add_foreign_key "spirely_guardians", "spirely_families", column: "family_id"
   add_foreign_key "spirely_invitations", "churches"

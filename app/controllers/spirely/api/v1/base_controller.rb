@@ -119,6 +119,15 @@ module Spirely
                  status: :not_found
         end
 
+        # Shared Planning Center Groups data (Spirely::Group & co) is
+        # available when any groups-using module is on (Church#uses_groups?),
+        # not one specific module — Kids Ministry will share it later.
+        def require_groups!
+          return if Current.church&.uses_groups?
+          render json: { error: "This feature isn't enabled for your church", code: "module_disabled" },
+                 status: :not_found
+        end
+
         def require_staff_or_volunteer!
           return if admin? || volunteer?
           render json: { error: "Forbidden", code: "forbidden" }, status: :forbidden

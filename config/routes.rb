@@ -65,6 +65,9 @@ Spirely::Engine.routes.draw do
         resource  :staff, only: [:show], controller: "staff"
         resources :staff_invitations, only: [:create]
         resources :tasks, only: [:index, :show, :create, :update, :destroy]
+        # Settings → which PCO group types are children's groups (shared
+        # groups data, 5ST-51).
+        resources :group_types, only: [:index, :update]
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member

@@ -8,6 +8,9 @@ class Church < ApplicationRecord
     "smallgroups" => { label: "Small Groups" },
   }.freeze
   KNOWN_MODULES = MODULES.keys.freeze
+  # Modules that use the shared Planning Center Groups data (Spirely::Group
+  # & co). Kids Ministry joins this once it shows children's groups.
+  GROUP_MODULES = %w[smallgroups].freeze
   STATUSES = %w[pending approved suspended].freeze
   # Two hand-built Lovable-designed looks for the Public Mini-Site
   # (Home/About/Events) — "default" is the original kidspire-ported
@@ -50,6 +53,12 @@ class Church < ApplicationRecord
   has_many :registration_statuses, class_name: "Spirely::RegistrationStatus", dependent: :destroy
   has_many :tasks, class_name: "Spirely::Task", dependent: :destroy
   has_many :family_posts, class_name: "Spirely::FamilyPost", dependent: :destroy
+  has_many :group_types, class_name: "Spirely::GroupType", dependent: :destroy
+  has_many :groups, class_name: "Spirely::Group", dependent: :destroy
+  has_many :group_memberships, class_name: "Spirely::GroupMembership", dependent: :destroy
+  has_many :group_events, class_name: "Spirely::GroupEvent", dependent: :destroy
+  has_many :group_attendances, class_name: "Spirely::GroupAttendance", dependent: :destroy
+  has_many :group_applications, class_name: "Spirely::GroupApplication", dependent: :destroy
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy
   has_one  :sync_setting, class_name: "Spirely::SyncSetting", dependent: :destroy
 
@@ -81,6 +90,12 @@ class Church < ApplicationRecord
 
   def module_enabled?(name)
     enabled_modules.include?(name.to_s)
+  end
+
+  # True when any module that uses Planning Center Groups is on — gates
+  # the groups sync and the shared group endpoints.
+  def uses_groups?
+    (enabled_modules & GROUP_MODULES).any?
   end
 
   # What the app shell's brand mark actually shows — falls back to the
