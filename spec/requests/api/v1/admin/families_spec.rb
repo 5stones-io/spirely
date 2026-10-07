@@ -215,6 +215,26 @@ RSpec.describe "Admin Families API", type: :request do
       expect(body["children"].first["first_name"]).to eq("Kid")
       expect(body["guardians"].first["first_name"]).to eq("Becca")
     end
+
+    it "includes each child's ministry interests and who last updated them" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+      parent = create(:account, first_name: "Sarah", last_name: "Johnson")
+
+      family = create(:spirely_family, church: church)
+      child  = create(:spirely_child, family: family)
+      child.update_ministry_interests!(ministry_interests: %w[puppets drama], updated_by: parent, updated_by_role: "parent")
+
+      use_tenant_host!(church)
+      get "/api/v1/admin/families/#{family.id}", headers: auth_headers(admin)
+
+      kid = JSON.parse(response.body)["children"].first
+      expect(kid["ministry_interests"]).to eq(%w[puppets drama])
+      expect(kid["ministry_interests_updated_at"]).to be_present
+      expect(kid["ministry_interests_updated_by_name"]).to eq("Sarah Johnson")
+      expect(kid["ministry_interests_updated_by_role"]).to eq("parent")
+    end
   end
 
   describe "POST /api/v1/admin/families/:id/invite" do

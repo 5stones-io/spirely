@@ -4,6 +4,7 @@ module Spirely
 
     fields :public_id, :first_name, :last_name, :birthdate, :notes,
            :allergens, :allergy_notes, :allergy_updated_at,
+           :ministry_interests, :ministry_interests_updated_at, :ministry_interests_updated_by_role,
            :pco_last_synced_at, :created_at, :updated_at
 
     field :grade
@@ -12,6 +13,7 @@ module Spirely
     field :age
     field :family_id
     field :allergy_summary
+    field :ministry_interests_updated_by_name
 
     # The "Linked Dual-Role Records" fix (Child#person, joined by shared
     # pco_person_id) made this possible without a schema change — nil

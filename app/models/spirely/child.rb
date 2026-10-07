@@ -40,16 +40,36 @@ module Spirely
       "latex"          => "Latex",
     }.freeze
 
+    # Fixed Ministry Interests vocabulary (5ST-48) — the same list for
+    # every church, parent-filled and staff-editable. Kept in sync with
+    # MINISTRY_INTEREST_LABELS in spirely-cloud's ministryInterestsApi.ts,
+    # same convention as ALLERGEN_LABELS above. Order here is display
+    # order. No cap on how many a kid can pick.
+    MINISTRY_INTEREST_LABELS = {
+      "human_videos"     => "Human Videos",
+      "sports"           => "Sports",
+      "arts_and_crafts"  => "Arts & Crafts",
+      "technology_media" => "Technology & Media",
+      "puppets"          => "Puppets",
+      "drama"            => "Drama",
+      "dance"            => "Dance",
+    }.freeze
+
+    MINISTRY_INTERESTS_UPDATED_BY_ROLES = %w[parent staff].freeze
+
     belongs_to :church
     belongs_to :family
     has_many :incidents, class_name: "Spirely::Incident", dependent: :destroy
     has_many :registration_statuses, class_name: "Spirely::RegistrationStatus", dependent: :destroy
+    belongs_to :ministry_interests_updated_by, class_name: "::Account", optional: true
 
     before_validation :inherit_church_from_family
 
     validates :first_name, :last_name, presence: true
     validates :grade, numericality: { in: -1..12, only_integer: true }, allow_nil: true
     validate :allergens_are_known
+    validate :ministry_interests_are_known
+    validates :ministry_interests_updated_by_role, inclusion: { in: MINISTRY_INTERESTS_UPDATED_BY_ROLES }, allow_nil: true
 
     # Accept PCO integer or human string ("3rd", "K") — store as integer
     def grade=(val)
@@ -98,6 +118,28 @@ module Spirely
       update!(allergens: allergens, allergy_notes: allergy_notes, allergy_updated_at: Time.current)
     end
 
+    # The one blessed way to change Ministry Interests — same shape as
+    # update_medical! above, plus who made the change (parent or staff),
+    # since both can edit and staff need to know whose answer they're
+    # seeing. Stored de-duplicated and in MINISTRY_INTEREST_LABELS order
+    # regardless of the order the caller sent them in.
+    def update_ministry_interests!(ministry_interests:, updated_by:, updated_by_role:)
+      picks = Array(ministry_interests).map(&:to_s).uniq
+      ordered = MINISTRY_INTEREST_LABELS.keys & picks
+      update!(ministry_interests: ordered + (picks - ordered),
+              ministry_interests_updated_at: Time.current,
+              ministry_interests_updated_by: updated_by,
+              ministry_interests_updated_by_role: updated_by_role)
+    end
+
+    # Display name for whoever last changed interests — Account#name is
+    # blank for older accounts, so fall back to email the same way other
+    # Account-name call sites do.
+    def ministry_interests_updated_by_name
+      account = ministry_interests_updated_by
+      account && (account.name || account.email)
+    end
+
     # Combines the structured allergen picks + free-text detail into one
     # display string (e.g. "Peanuts, Tree Nuts — carries an EpiPen") for
     # anywhere that just wants a single flag/summary line rather than the
@@ -114,6 +156,11 @@ module Spirely
     def allergens_are_known
       unknown = Array(allergens) - ALLERGEN_LABELS.keys
       errors.add(:allergens, "contains unknown value(s): #{unknown.join(', ')}") if unknown.any?
+    end
+
+    def ministry_interests_are_known
+      unknown = Array(ministry_interests) - MINISTRY_INTEREST_LABELS.keys
+      errors.add(:ministry_interests, "contains unknown value(s): #{unknown.join(', ')}") if unknown.any?
     end
 
     def inherit_church_from_family
