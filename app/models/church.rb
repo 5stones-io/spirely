@@ -1,5 +1,13 @@
 class Church < ApplicationRecord
-  KNOWN_MODULES = %w[kidsmin].freeze
+  # Ministry modules a church can turn on (Church#enabled_modules). Keys
+  # are the stored/API ids; label is what admins see in Settings and
+  # onboarding. Adding a module is one entry here plus its own
+  # require_module!-gated code.
+  MODULES = {
+    "kidsmin"     => { label: "Kids Ministry" },
+    "smallgroups" => { label: "Small Groups" },
+  }.freeze
+  KNOWN_MODULES = MODULES.keys.freeze
   STATUSES = %w[pending approved suspended].freeze
   # Two hand-built Lovable-designed looks for the Public Mini-Site
   # (Home/About/Events) — "default" is the original kidspire-ported

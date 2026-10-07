@@ -71,4 +71,38 @@ RSpec.describe "GET /api/v1/me", type: :request do
     get "/api/v1/me", headers: auth_headers(account)
     expect(JSON.parse(response.body)["role_preview_enabled"]).to be(false)
   end
+
+  it "returns the church's enabled modules" do
+    church  = create(:church, enabled_modules: %w[kidsmin smallgroups])
+    account = create(:account)
+    create(:membership, :admin, church: church, account: account)
+
+    use_tenant_host!(church)
+    get "/api/v1/me", headers: auth_headers(account)
+    expect(JSON.parse(response.body)["enabled_modules"]).to eq(%w[kidsmin smallgroups])
+  end
+
+  it "lists every capability while role stays the highest-priority one" do
+    church  = create(:church)
+    account = create(:account)
+    create(:membership, :admin, church: church, account: account)
+    create(:spirely_family, church: church, account: account)
+
+    use_tenant_host!(church)
+    get "/api/v1/me", headers: auth_headers(account)
+    body = JSON.parse(response.body)
+    expect(body["role"]).to eq("staff")
+    expect(body["capabilities"]).to eq(%w[staff parent])
+  end
+
+  it "returns empty capabilities and a nil role with no membership" do
+    church  = create(:church)
+    account = create(:account)
+
+    use_tenant_host!(church)
+    get "/api/v1/me", headers: auth_headers(account)
+    body = JSON.parse(response.body)
+    expect(body["capabilities"]).to eq([])
+    expect(body["role"]).to be_nil
+  end
 end
