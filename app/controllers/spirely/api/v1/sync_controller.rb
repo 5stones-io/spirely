@@ -41,6 +41,13 @@ module Spirely
             unless attendance_only
               Spirely::PcoCheckInStatsSyncJob.perform_later(Current.church.id)
               enqueued << "check_in_stats"
+
+              # Read-only Groups mirror (5ST-51), only for churches with a
+              # groups-using module on.
+              if Current.church.uses_groups?
+                Spirely::PcoGroupsSyncJob.perform_later(Current.church.id)
+                enqueued << "groups"
+              end
             end
           end
 

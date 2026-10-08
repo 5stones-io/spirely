@@ -7,6 +7,7 @@ module Spirely
            :auto_sync_enabled, :pco_ministry_tag,
            :pco_kids_service_types, :pco_event_tags,
            :pco_assessment_field_id, :pco_assessment_field_name,
-           :last_synced_at, :updated_at
+           :last_synced_at, :updated_at,
+           :groups_last_synced_at, :groups_access_denied_at
   end
 end

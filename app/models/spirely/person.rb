@@ -11,6 +11,9 @@ module Spirely
     has_one :volunteer_profile, class_name: "Spirely::VolunteerProfile", dependent: :destroy
     has_many :attendances, class_name: "Spirely::Attendance", dependent: :destroy
     has_many :contact_notes, class_name: "Spirely::ContactNote", dependent: :destroy
+    has_many :group_memberships, class_name: "Spirely::GroupMembership", dependent: :destroy
+    has_many :group_attendances, class_name: "Spirely::GroupAttendance", dependent: :destroy
+    has_many :group_applications, class_name: "Spirely::GroupApplication", dependent: :destroy
 
     validates :pco_person_id, presence: true, uniqueness: { scope: :church_id }
     validates :first_name, presence: true
