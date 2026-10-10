@@ -49,6 +49,8 @@ Spirely::Engine.routes.draw do
       put    "my_groups/groups/:group_id/schedule_slot", to: "my_groups#assign"
       delete "my_groups/groups/:group_id/schedule_slot", to: "my_groups#unassign"
       post   "my_groups/slots/:id/respond",              to: "my_groups#respond"
+      get    "my_groups/follow_ups/:id",                 to: "my_groups#follow_up"
+      post   "my_groups/follow_ups/:id/notes",           to: "my_groups#follow_up_notes"
       get    "schedule_responses/:token",                to: "schedule_responses#show"
       post   "schedule_responses/:token",                to: "schedule_responses#create"
 
@@ -87,6 +89,10 @@ Spirely::Engine.routes.draw do
           end
         end
         resource  :group_schedule, only: [:show], controller: "group_schedule"
+        # Attendance follow-ups (5ST-53).
+        resources :group_nudges, only: [:index, :show, :update] do
+          post :notes, on: :member
+        end
         resource  :groups_overview, only: [:show], controller: "groups_overview"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member

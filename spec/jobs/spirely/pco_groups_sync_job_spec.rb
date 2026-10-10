@@ -74,6 +74,7 @@ RSpec.describe Spirely::PcoGroupsSyncJob do
 
   it "mirrors group types, groups, memberships, meetings, attendance and join requests" do
     stub_full_sync
+    expect(Spirely::GroupNudgeSyncJob).to receive(:perform_later).with(church.id)
     described_class.perform_now(church.id)
 
     expect(church.group_types.sole).to have_attributes(name: "Adult Groups", audience: "adults")

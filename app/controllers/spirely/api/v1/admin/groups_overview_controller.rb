@@ -10,6 +10,7 @@ module Spirely
         class GroupsOverviewController < BaseController
           include GroupsJson
           include ScheduleJson
+          include FollowUpJson
 
           ATTENTION_LIST_SIZE = 5
 
@@ -37,11 +38,29 @@ module Spirely
               },
               groups_count: healths.size,
               schedule: schedule_overview(healths.map(&:group)),
+              follow_ups: follow_ups_overview,
               pco_reports_url: PCO_GROUPS_REPORTS_URL,
             }
           end
 
           private
+
+          FOLLOW_UPS_LIST_SIZE = 3
+
+          # Attendance follow-ups (5ST-53): what's open, unassigned ones and
+          # the oldest first, and this month's outcomes.
+          def follow_ups_overview
+            nudges = Current.church.group_nudges
+            open = nudges.open.includes(:group, :person, :owner_person).order(:created_at).to_a
+            month = nudges.resolved.where(resolved_at: Time.current.beginning_of_month..)
+            {
+              open: open.size,
+              unassigned: open.count { |n| n.owner_person_id.nil? },
+              contacted_this_month: month.where(resolution: "contacted").count,
+              returned_this_month: month.where(resolution: "returned").count,
+              top: open.sort_by { |n| [n.owner_person_id ? 1 : 0, n.created_at] }.first(FOLLOW_UPS_LIST_SIZE).map { |n| follow_up_json(n) },
+            }
+          end
 
           OPEN_SLOTS_LIST_SIZE = 5
 

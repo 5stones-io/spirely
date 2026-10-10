@@ -8,6 +8,7 @@ module Spirely
       # Church Center; this only covers what Spirely adds.
       class MyGroupsController < BaseController
         include ScheduleJson
+        include FollowUpJson
 
         before_action -> { require_module!("smallgroups") }
         before_action :require_person!
@@ -23,7 +24,19 @@ module Spirely
             name: current_person.full_name,
             requests: requests.map { |s| request_json(s) },
             groups: memberships.map { |m| group_json(m) },
+            # Open follow-ups for groups this person leads (5ST-53).
+            follow_ups: led_follow_ups.map { |n| follow_up_json(n) },
           }
+        end
+
+        # GET /api/v1/my_groups/follow_ups/:id — leaders of that group only.
+        def follow_up
+          render json: follow_up_json(led_follow_up, detail: true)
+        end
+
+        # POST /api/v1/my_groups/follow_ups/:id/notes  { body, outcome? }
+        def follow_up_notes
+          log_follow_up(led_follow_up)
         end
 
         # POST /api/v1/my_groups/groups/:group_id/sign_up
@@ -58,6 +71,13 @@ module Spirely
         end
 
         private
+
+        def led_follow_ups
+          led = current_group_memberships.select { |m| m.role == "leader" }.map(&:group_id)
+          Current.church.group_nudges.open.where(group_id: led).includes(:group, :person, :owner_person).order(:created_at)
+        end
+
+        def led_follow_up = led_follow_ups.find(params[:id])
 
         def require_person!
           return if current_person

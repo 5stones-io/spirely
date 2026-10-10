@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_10_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_10_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -286,6 +286,40 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_10_000001) do
     t.index ["person_id"], name: "index_spirely_group_memberships_on_person_id"
   end
 
+  create_table "spirely_group_nudge_notes", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_nudge_id", null: false
+    t.bigint "author_account_id"
+    t.string "author_name"
+    t.text "body"
+    t.string "outcome"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["author_account_id"], name: "index_spirely_group_nudge_notes_on_author_account_id"
+    t.index ["church_id"], name: "index_spirely_group_nudge_notes_on_church_id"
+    t.index ["group_nudge_id"], name: "index_spirely_group_nudge_notes_on_group_nudge_id"
+  end
+
+  create_table "spirely_group_nudges", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_id", null: false
+    t.bigint "person_id", null: false
+    t.string "reason", default: "attendance_drop", null: false
+    t.jsonb "metrics", default: {}, null: false
+    t.bigint "owner_person_id"
+    t.datetime "resolved_at"
+    t.string "resolution"
+    t.bigint "resolved_by_account_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id"], name: "index_spirely_group_nudges_on_church_id"
+    t.index ["group_id", "person_id"], name: "index_spirely_group_nudges_one_open_per_person", unique: true, where: "(resolved_at IS NULL)"
+    t.index ["group_id"], name: "index_spirely_group_nudges_on_group_id"
+    t.index ["owner_person_id"], name: "index_spirely_group_nudges_on_owner_person_id"
+    t.index ["person_id"], name: "index_spirely_group_nudges_on_person_id"
+    t.index ["resolved_by_account_id"], name: "index_spirely_group_nudges_on_resolved_by_account_id"
+  end
+
   create_table "spirely_group_schedule_assignments", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.bigint "group_id", null: false
@@ -503,6 +537,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_10_000001) do
   add_foreign_key "spirely_group_memberships", "churches"
   add_foreign_key "spirely_group_memberships", "spirely_groups", column: "group_id"
   add_foreign_key "spirely_group_memberships", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_group_nudge_notes", "accounts", column: "author_account_id", on_delete: :nullify
+  add_foreign_key "spirely_group_nudge_notes", "churches"
+  add_foreign_key "spirely_group_nudge_notes", "spirely_group_nudges", column: "group_nudge_id"
+  add_foreign_key "spirely_group_nudges", "accounts", column: "resolved_by_account_id", on_delete: :nullify
+  add_foreign_key "spirely_group_nudges", "churches"
+  add_foreign_key "spirely_group_nudges", "spirely_groups", column: "group_id"
+  add_foreign_key "spirely_group_nudges", "spirely_people", column: "owner_person_id", on_delete: :nullify
+  add_foreign_key "spirely_group_nudges", "spirely_people", column: "person_id"
   add_foreign_key "spirely_group_schedule_assignments", "accounts", column: "assigned_by_account_id", on_delete: :nullify
   add_foreign_key "spirely_group_schedule_assignments", "churches"
   add_foreign_key "spirely_group_schedule_assignments", "spirely_group_events", column: "group_event_id"
