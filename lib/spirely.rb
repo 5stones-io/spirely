@@ -4,6 +4,7 @@ require "spirely/configuration"
 require "spirely/encryption"
 require "spirely/pco_client"
 require "spirely/sms"
+require "spirely/church_time"
 require "spirely/hydra_client"
 require "spirely/engine"
 

@@ -38,7 +38,22 @@ module Spirely
           { id: a.id, name: a.person.full_name, applied_at: a.applied_at, message: a.message }
         },
         pco_url:          "#{PCO_GROUPS_URL}/#{group.pco_group_id}",
+        schedule:         schedule_settings_json(group),
       )
+    end
+
+    def schedule_settings_json(group)
+      head = group.head_leader
+      upcoming = group.meeting_dates(weeks: Spirely::GroupSchedule::MAX_WEEKS)
+      {
+        jobs:                   group.jobs,
+        head_leader:            head && { id: head.id, name: head.full_name },
+        leaders:                group.current_leaders.map { |p| { id: p.id, name: p.full_name } },
+        cadence_weekday:        group.cadence_weekday,
+        cadence_interval_weeks: group.cadence_interval_weeks,
+        dates_source:           upcoming.values.any? ? "planning_center" : (group.cadence_weekday ? "repeat" : "none"),
+        upcoming_meetings:      upcoming.size,
+      }
     end
   end
 end

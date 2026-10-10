@@ -59,6 +59,7 @@ class Church < ApplicationRecord
   has_many :group_events, class_name: "Spirely::GroupEvent", dependent: :destroy
   has_many :group_attendances, class_name: "Spirely::GroupAttendance", dependent: :destroy
   has_many :group_applications, class_name: "Spirely::GroupApplication", dependent: :destroy
+  has_many :group_schedule_assignments, class_name: "Spirely::GroupScheduleAssignment", dependent: :destroy
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy
   has_one  :sync_setting, class_name: "Spirely::SyncSetting", dependent: :destroy
 

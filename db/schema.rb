@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_07_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_10_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -278,10 +278,38 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_07_000002) do
     t.datetime "left_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "head_leader", default: false, null: false
     t.index ["church_id", "pco_membership_id"], name: "idx_on_church_id_pco_membership_id_ed14445c1f", unique: true
     t.index ["church_id"], name: "index_spirely_group_memberships_on_church_id"
     t.index ["group_id"], name: "index_spirely_group_memberships_on_group_id"
+    t.index ["group_id"], name: "index_spirely_group_memberships_one_head_leader", unique: true, where: "head_leader"
     t.index ["person_id"], name: "index_spirely_group_memberships_on_person_id"
+  end
+
+  create_table "spirely_group_schedule_assignments", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "group_id", null: false
+    t.date "meets_on", null: false
+    t.string "job", null: false
+    t.bigint "group_event_id"
+    t.bigint "person_id"
+    t.string "status", default: "open", null: false
+    t.string "source"
+    t.bigint "assigned_by_account_id"
+    t.datetime "responded_at"
+    t.string "token_digest"
+    t.datetime "token_expires_at"
+    t.datetime "notified_at"
+    t.string "notify_channels", default: [], null: false, array: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assigned_by_account_id"], name: "idx_on_assigned_by_account_id_723c21b35d"
+    t.index ["church_id"], name: "index_spirely_group_schedule_assignments_on_church_id"
+    t.index ["group_event_id"], name: "index_spirely_group_schedule_assignments_on_group_event_id"
+    t.index ["group_id", "meets_on", "job"], name: "index_spirely_group_schedule_slot", unique: true
+    t.index ["group_id"], name: "index_spirely_group_schedule_assignments_on_group_id"
+    t.index ["person_id"], name: "index_spirely_group_schedule_assignments_on_person_id"
+    t.index ["token_digest"], name: "index_spirely_group_schedule_assignments_on_token_digest", unique: true
   end
 
   create_table "spirely_group_types", force: :cascade do |t|
@@ -313,6 +341,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_07_000002) do
     t.datetime "pco_last_synced_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "schedule_jobs", default: ["lead", "host_home", "refreshments"], null: false, array: true
+    t.integer "cadence_weekday"
+    t.integer "cadence_interval_weeks", default: 1, null: false
+    t.date "cadence_anchor_on"
     t.index ["church_id", "pco_group_id"], name: "index_spirely_groups_on_church_id_and_pco_group_id", unique: true
     t.index ["church_id"], name: "index_spirely_groups_on_church_id"
     t.index ["group_type_id"], name: "index_spirely_groups_on_group_type_id"
@@ -471,6 +503,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_07_000002) do
   add_foreign_key "spirely_group_memberships", "churches"
   add_foreign_key "spirely_group_memberships", "spirely_groups", column: "group_id"
   add_foreign_key "spirely_group_memberships", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_group_schedule_assignments", "accounts", column: "assigned_by_account_id", on_delete: :nullify
+  add_foreign_key "spirely_group_schedule_assignments", "churches"
+  add_foreign_key "spirely_group_schedule_assignments", "spirely_group_events", column: "group_event_id"
+  add_foreign_key "spirely_group_schedule_assignments", "spirely_groups", column: "group_id"
+  add_foreign_key "spirely_group_schedule_assignments", "spirely_people", column: "person_id"
   add_foreign_key "spirely_group_types", "churches"
   add_foreign_key "spirely_groups", "churches"
   add_foreign_key "spirely_groups", "spirely_group_types", column: "group_type_id"
