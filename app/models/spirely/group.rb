@@ -9,6 +9,7 @@ module Spirely
     has_many :events, class_name: "Spirely::GroupEvent", dependent: :destroy
     has_many :applications, class_name: "Spirely::GroupApplication", dependent: :destroy
     has_many :schedule_assignments, class_name: "Spirely::GroupScheduleAssignment", dependent: :destroy
+    has_many :nudges, class_name: "Spirely::GroupNudge", dependent: :destroy
 
     validate :schedule_jobs_are_known
     validates :cadence_weekday, inclusion: { in: 0..6 }, allow_nil: true

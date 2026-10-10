@@ -49,6 +49,8 @@ module Spirely
       sync_applications
 
       settings.update!(groups_last_synced_at: Time.current, groups_access_denied_at: nil)
+      # Fresh attendance in hand — refresh attendance follow-ups (5ST-53).
+      Spirely::GroupNudgeSyncJob.perform_later(church.id)
     rescue Spirely::PcoApiError => e
       raise unless e.status == 403
 
