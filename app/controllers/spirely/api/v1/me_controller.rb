@@ -48,6 +48,8 @@ module Spirely
           return "staff" if admin?
           return "volunteer" if volunteer?
           return "parent" if Current.membership&.role == "family"
+          return "group_leader" if group_leader?
+          return "group_member" if group_member?
 
           nil
         end
@@ -60,6 +62,8 @@ module Spirely
             ("staff" if admin?),
             ("volunteer" if volunteer?),
             ("parent" if Current.membership&.role == "family" || current_family),
+            ("group_leader" if group_leader?),
+            ("group_member" if group_member? && !group_leader?),
           ].compact
         end
       end

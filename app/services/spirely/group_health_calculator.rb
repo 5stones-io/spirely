@@ -8,6 +8,10 @@ module Spirely
   # - shrinking:       current members down SHRINKING_THRESHOLD or more
   #                    versus TREND_WINDOW ago
   # - request_waiting: a pending join request older than REQUEST_WAIT
+  # - lead_unscheduled: upcoming meetings (next GroupSchedule::WEEKS) with
+  #                    no one asked or confirmed to lead — only for groups
+  #                    that have started using the schedule, so turning the
+  #                    module on doesn't flag every group at once
   #
   # Membership history comes from GroupMembership#joined_at (from PCO) and
   # #left_at (set by the sync when someone disappears), so "members then"
@@ -60,6 +64,15 @@ module Spirely
         flags << Flag.new(key: "request_waiting", label: "Request waiting #{days} days",
                           detail: "#{oldest.person.full_name} asked to join #{days} days ago and hasn't heard back." +
                                   (waiting.size > 1 ? " #{waiting.size - 1} more waiting." : ""))
+      end
+
+      if group.schedule_assignments.exists?
+        meetings = Spirely::GroupSchedule.new(group).meetings
+        unled = meetings.count { |m| !m[:slots]["lead"].status.in?(%w[pending accepted]) }
+        if unled.positive?
+          flags << Flag.new(key: "lead_unscheduled", label: "No lead scheduled (#{unled})",
+                            detail: "No one is leading #{unled} of the next #{meetings.size} meetings.")
+        end
       end
 
       Health.new(group: group, leaders: leaders, members_count: current.size, members_then: then_count,

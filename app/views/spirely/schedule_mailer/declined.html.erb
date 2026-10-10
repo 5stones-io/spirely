@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 16px; color: #2c1a0e;">
+  <p style="font-size: 17px; font-weight: 700;">
+    <%= @name %> can't <%= @slot.job_verb %> <%= @slot.group.name %> on <%= @slot.meets_on.strftime("%A, %b %-d") %>.
+  </p>
+  <p style="color: #8b6855;">
+    The <%= @slot.job_label.downcase %> spot is open again. You can ask someone else from the group's
+    schedule in <%= @church.name %>'s Spirely, or members can sign up themselves from My Groups.
+  </p>
+</body>
+</html>

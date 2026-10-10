@@ -93,6 +93,21 @@ module Spirely
                                Current.church.people.find_by(email: Current.account.email)
         end
 
+        # Small Groups (5ST-55): this person's current memberships in active
+        # groups, matched by their synced Person. Empty when the module is
+        # off or the account can't be matched to Planning Center.
+        def current_group_memberships
+          @current_group_memberships ||=
+            if Current.church&.module_enabled?("smallgroups") && current_person
+              current_person.group_memberships.current.joins(:group).merge(Spirely::Group.active).includes(:group).to_a
+            else
+              []
+            end
+        end
+
+        def group_leader? = current_group_memberships.any? { |m| m.role == "leader" }
+        def group_member? = current_group_memberships.any?
+
         def require_family!
           return if current_family
           render json: { error: "Family profile not found", code: "family_not_found" },

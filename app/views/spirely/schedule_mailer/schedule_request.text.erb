@@ -1,0 +1,12 @@
+Hi <%= @first_name %>,
+
+<%= @asker %> scheduled you to <%= @slot.job_verb %> <%= @slot.group.name %>. Can you make it?
+
+When:  <%= @when %>
+<% if @slot.group.location_name.present? %>Where: <%= @slot.group.location_name %>
+<% end %>Job:   <%= @slot.job_label %>
+
+Accept:  <%= @accept_url %>
+Decline: <%= @decline_url %>
+
+Each link opens a page where you confirm your answer — no sign-in needed.

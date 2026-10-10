@@ -42,6 +42,16 @@ Spirely::Engine.routes.draw do
       resource  :sync_settings, only: [:show, :update]
       post "/sync/trigger", to: "sync#trigger"
 
+      # Small Groups (5ST-55): a leader's/member's own schedule, and the
+      # no-sign-in accept/decline page behind schedule emails and texts.
+      get    "my_groups",                               to: "my_groups#show"
+      post   "my_groups/groups/:group_id/sign_up",       to: "my_groups#sign_up"
+      put    "my_groups/groups/:group_id/schedule_slot", to: "my_groups#assign"
+      delete "my_groups/groups/:group_id/schedule_slot", to: "my_groups#unassign"
+      post   "my_groups/slots/:id/respond",              to: "my_groups#respond"
+      get    "schedule_responses/:token",                to: "schedule_responses#show"
+      post   "schedule_responses/:token",                to: "schedule_responses#create"
+
       namespace :admin do
         resource  :stats,      only: [:show]
         # `controller:` overrides needed — Rails' default pluralization for
@@ -70,7 +80,13 @@ Spirely::Engine.routes.draw do
         resources :group_types, only: [:index, :update]
         # Small Groups module screens (5ST-52) — Overview tab, Groups tab
         # and group sheet.
-        resources :groups, only: [:index, :show]
+        resources :groups, only: [:index, :show, :update] do
+          # Meeting sheet (5ST-55): fill / clear / re-send one job.
+          resource :schedule_slot, only: [:update, :destroy], controller: "group_schedule_slots" do
+            post :resend
+          end
+        end
+        resource  :group_schedule, only: [:show], controller: "group_schedule"
         resource  :groups_overview, only: [:show], controller: "groups_overview"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
