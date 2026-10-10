@@ -68,6 +68,10 @@ Spirely::Engine.routes.draw do
         # Settings → which PCO group types are children's groups (shared
         # groups data, 5ST-51).
         resources :group_types, only: [:index, :update]
+        # Small Groups module screens (5ST-52) — Overview tab, Groups tab
+        # and group sheet.
+        resources :groups, only: [:index, :show]
+        resource  :groups_overview, only: [:show], controller: "groups_overview"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member
