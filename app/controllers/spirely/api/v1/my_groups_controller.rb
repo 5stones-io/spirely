@@ -89,7 +89,9 @@ module Spirely
               meeting_json(group, m).tap do |j|
                 j[:slots].each do |s|
                   s[:mine] = s[:person]&.dig(:id) == current_person.id
-                  s[:can_sign_up] = !s[:mine] && %w[open declined].include?(s[:status]) &&
+                  # Open or turned down — anyone eligible can take it,
+                  # including someone who declined and then found they can.
+                  s[:can_sign_up] = %w[open declined].include?(s[:status]) &&
                                     (s[:job] != "lead" || membership.role == "leader")
                 end
               end

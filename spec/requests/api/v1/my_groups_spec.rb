@@ -45,6 +45,19 @@ RSpec.describe "My Groups", type: :request do
     expect(response).to have_http_status(:unprocessable_entity)
   end
 
+  it "lets someone who declined take the spot back" do
+    slot = Spirely::GroupSchedule.new(group).assign!(meets_on: Date.new(2026, 10, 15), job: "host_home", person: beth, by_account: nil, source: "staff")
+    Spirely::GroupSchedule.respond!(slot, "decline")
+
+    get "/api/v1/my_groups", headers: auth_headers(beth_account)
+    host = JSON.parse(response.body)["groups"].first["meetings"].first["slots"].find { |s| s["job"] == "host_home" }
+    expect(host).to include("mine" => true, "can_sign_up" => true)
+
+    post "/api/v1/my_groups/groups/#{group.id}/sign_up", params: { meets_on: "2026-10-15", job: "host_home" },
+         headers: auth_headers(beth_account), as: :json
+    expect(slot.reload.status).to eq("accepted")
+  end
+
   it "lets only the head leader schedule the group" do
     put "/api/v1/my_groups/groups/#{group.id}/schedule_slot", params: { meets_on: "2026-10-15", job: "refreshments", person_id: beth.id },
         headers: auth_headers(beth_account), as: :json
