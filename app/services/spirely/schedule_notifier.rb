@@ -6,7 +6,7 @@ module Spirely
   # tapping it never answers on its own, so email link scanners can't.
   class ScheduleNotifier
     def self.response_url(church, token)
-      "https://#{church.primary_hostname}/schedule/r/#{token}"
+      "https://#{church.hostname_for_module("smallgroups")}/schedule/r/#{token}"
     end
 
     def self.request(slot, token)

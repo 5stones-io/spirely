@@ -27,9 +27,10 @@ module Spirely
             # and on admin? here so a non-staff account is never told it
             # exists even if the church has it enabled.
             role_preview_enabled: admin? && Current.church.role_preview_enabled?,
-            # Which ministry modules this church has on (Church::MODULES) —
-            # the frontend gates navigation and screens on this.
-            enabled_modules: Current.church.enabled_modules,
+            # Which ministry modules this church has on (Church::MODULES),
+            # narrowed to this domain's own modules on a module-scoped
+            # domain — the frontend gates navigation and screens on this.
+            enabled_modules: Current.church.active_modules,
             # Every role this account holds here, not just the single
             # highest-priority `role` above — e.g. an admin who's also a
             # parent gets ["staff", "parent"]. `role` still decides the
