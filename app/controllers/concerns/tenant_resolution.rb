@@ -16,8 +16,9 @@ module TenantResolution
   # subdomain can (spirely-cloud only), so this always runs at the
   # controller layer for every tenant-facing request.
   def resolve_tenant!
+    Current.custom_domain = CustomDomain.where.not(verified_at: nil).find_by(hostname: request.host)
     Current.church =
-      CustomDomain.where.not(verified_at: nil).find_by(hostname: request.host)&.church ||
+      Current.custom_domain&.church ||
       Church.find_by(slug: request.subdomain) ||
       sole_church_fallback
   end

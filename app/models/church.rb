@@ -90,20 +90,57 @@ class Church < ApplicationRecord
   validates :public_site_theme, inclusion: { in: PUBLIC_SITE_THEMES }
   validates :logo_shape, inclusion: { in: LOGO_SHAPES }
 
+  # The modules this request can use: everything the church has on,
+  # narrowed to the custom domain's own list when the request came in on a
+  # module-scoped domain (5ST-12) — e.g. only "smallgroups" on
+  # portal.jccag.org. Outside a request (jobs, console) there's no domain,
+  # so this is just enabled_modules — the groups sync still runs.
+  def active_modules
+    domain = current_domain
+    domain&.restricted? ? enabled_modules & domain.modules : enabled_modules
+  end
+
   def module_enabled?(name)
-    enabled_modules.include?(name.to_s)
+    active_modules.include?(name.to_s)
   end
 
   # True when any module that uses Planning Center Groups is on — gates
   # the groups sync and the shared group endpoints.
   def uses_groups?
-    (enabled_modules & GROUP_MODULES).any?
+    (active_modules & GROUP_MODULES).any?
+  end
+
+  # Where links for one module's features should point (e.g. Small Groups
+  # schedule emails): a verified domain scoped to that module, else the
+  # primary domain if it serves the module, else any unrestricted verified
+  # domain, else the church's default host.
+  def hostname_for_module(name)
+    verified = custom_domains.select(&:verified?)
+    primary  = verified.find(&:primary?)
+    domain = verified.find { |d| d.restricted? && d.serves_module?(name) } ||
+             (primary if primary&.serves_module?(name)) ||
+             verified.find { |d| !d.restricted? }
+    domain&.hostname || default_hostname
   end
 
   # What the app shell's brand mark actually shows — falls back to the
   # church's real `name` when no shorter display_name has been set.
+  # A module-scoped domain with its own display_name (5ST-12) overrides the
+  # church-wide branding for requests on that domain.
   def brand_name
-    display_name.presence || name
+    current_domain&.display_name.presence || display_name.presence || name
+  end
+
+  # The logo the app shell shows on this request's domain — a domain with
+  # its own branding only ever shows its own logo (nil = initial mark).
+  def active_logo
+    domain = current_domain
+    return (domain.logo.attached? ? domain.logo : nil) if domain&.own_branding?
+    logo.attached? ? logo : nil
+  end
+
+  def active_logo_shape
+    current_domain&.logo_shape.presence || logo_shape
   end
 
   def placeholder_slug?
@@ -139,10 +176,22 @@ class Church < ApplicationRecord
   # no per-church slug subdomain to fall back to by default.
   def primary_hostname
     verified_primary_domain = custom_domains.find { |d| d.primary? && d.verified? }
-    verified_primary_domain&.hostname || ENV.fetch("APP_HOST", "localhost:3000")
+    verified_primary_domain&.hostname || default_hostname
+  end
+
+  # Host for a church with no verified custom domain. One fixed host for a
+  # self-hosted install; spirely-cloud overrides this per church.
+  def default_hostname
+    ENV.fetch("APP_HOST", "localhost:3000")
   end
 
   private
+
+  # The request's custom domain, when it belongs to this church.
+  def current_domain
+    domain = Current.custom_domain
+    domain if domain && domain.church_id == id
+  end
 
   def logo_within_size_and_type_limits
     return unless logo.attached?

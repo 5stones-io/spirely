@@ -105,4 +105,18 @@ RSpec.describe "GET /api/v1/me", type: :request do
     expect(body["capabilities"]).to eq([])
     expect(body["role"]).to be_nil
   end
+
+  context "on a module-scoped custom domain (5ST-12)" do
+    it "only reports the domain's modules" do
+      church  = create(:church, enabled_modules: %w[kidsmin smallgroups])
+      account = create(:account)
+      create(:membership, :admin, church: church, account: account)
+      create(:custom_domain, :verified, church: church, hostname: "portal.example.org", modules: %w[smallgroups])
+
+      host! "portal.example.org"
+      get "/api/v1/me", headers: auth_headers(account)
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["enabled_modules"]).to eq(%w[smallgroups])
+    end
+  end
 end
