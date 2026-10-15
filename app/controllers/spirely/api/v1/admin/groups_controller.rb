@@ -17,7 +17,7 @@ module Spirely
             healths = Spirely::GroupHealthCalculator.new(Current.church).call
             render json: {
               groups: healths.map { |h| group_summary_json(h) },
-              group_types: Current.church.group_types.current.order(:name).map { |t| { id: t.id, name: t.name, audience: t.audience } },
+              group_types: visible_group_types.order(:name).map { |t| { id: t.id, name: t.name, audience: t.audience } },
             }
           end
 
@@ -25,7 +25,7 @@ module Spirely
           # head leader, which hosting jobs are on, and a repeat for groups
           # with no upcoming Planning Center events.
           def update
-            group = Current.church.groups.active.find(params[:id])
+            group = Current.church.visible_groups.active.find(params[:id])
             Spirely::Group.transaction do
               if params.key?(:head_leader_person_id)
                 group.memberships.update_all(head_leader: false)
@@ -49,11 +49,20 @@ module Spirely
 
           # GET /api/v1/admin/groups/:id
           def show
-            group = Current.church.groups.active.find(params[:id])
+            group = Current.church.visible_groups.active.find(params[:id])
             health = Spirely::GroupHealthCalculator.new(Current.church).health_for(group)
             render json: group_detail_json(health)
           rescue ActiveRecord::RecordNotFound
             render json: { error: "Group not found", code: "not_found" }, status: :not_found
+          end
+
+          private
+
+          # Matches Church#visible_groups, so a kids-only domain's type
+          # filter doesn't list adult group types.
+          def visible_group_types
+            types = Current.church.group_types.current
+            Current.church.children_groups_only? ? types.where(audience: "children") : types
           end
         end
       end

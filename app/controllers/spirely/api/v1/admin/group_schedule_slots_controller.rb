@@ -38,7 +38,7 @@ module Spirely
           def meets_on = Date.parse(params.require(:meets_on))
 
           def set_group
-            @group = Current.church.groups.active.find(params[:group_id])
+            @group = Current.church.visible_groups.active.find(params[:group_id])
           end
 
           rescue_from ActiveRecord::RecordNotFound do

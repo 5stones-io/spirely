@@ -21,6 +21,14 @@ RSpec.describe "Module-scoped custom domains", type: :model do
       expect(church.module_enabled?("kidsmin")).to be false
 
       Current.custom_domain = kids
+      expect(church.active_modules).to eq(%w[kidsmin smallgroups])
+    end
+
+    it "gives a kids-only domain Small Groups only when the church has it on" do
+      Current.custom_domain = kids
+      expect(church.children_groups_only?).to be true
+
+      church.update!(enabled_modules: %w[kidsmin])
       expect(church.active_modules).to eq(%w[kidsmin])
       expect(church.uses_groups?).to be false
     end
@@ -39,6 +47,24 @@ RSpec.describe "Module-scoped custom domains", type: :model do
     it "treats a domain with no modules as unrestricted" do
       Current.custom_domain = create(:custom_domain, :verified, church: church)
       expect(church.active_modules).to eq(%w[kidsmin smallgroups])
+    end
+  end
+
+  describe "#visible_groups" do
+    let(:kids_type) { church.group_types.create!(name: "Kids", pco_group_type_id: "gt-k", audience: "children") }
+    let!(:rangers)  { church.groups.create!(name: "Rangers", pco_group_id: "g1", group_type: kids_type) }
+    let!(:moms)     { church.groups.create!(name: "Moms", pco_group_id: "g2") }
+
+    it "is every group outside a request and on an unrestricted or Small Groups domain" do
+      expect(church.visible_groups).to contain_exactly(rangers, moms)
+      Current.custom_domain = portal
+      expect(church.children_groups_only?).to be false
+      expect(church.visible_groups).to contain_exactly(rangers, moms)
+    end
+
+    it "is only children's groups on a kids-only domain" do
+      Current.custom_domain = kids
+      expect(church.visible_groups).to contain_exactly(rangers)
     end
   end
 
