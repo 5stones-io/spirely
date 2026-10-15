@@ -15,9 +15,9 @@ module Spirely
 
           # GET /api/v1/admin/group_nudges?status=open|resolved
           def index
-            scope = Current.church.group_nudges.includes(:group, :person, :owner_person)
+            scope = Current.church.visible_group_nudges.includes(:group, :person, :owner_person)
             nudges = params[:status] == "resolved" ? scope.resolved.order(resolved_at: :desc).limit(RESOLVED_LIMIT) : scope.open.order(:created_at)
-            render json: { follow_ups: nudges.map { |n| follow_up_json(n) }, open_count: Current.church.group_nudges.open.count }
+            render json: { follow_ups: nudges.map { |n| follow_up_json(n) }, open_count: Current.church.visible_group_nudges.open.count }
           end
 
           # GET /api/v1/admin/group_nudges/:id
@@ -43,7 +43,7 @@ module Spirely
           private
 
           def set_nudge
-            @nudge = Current.church.group_nudges.find(params[:id])
+            @nudge = Current.church.visible_group_nudges.find(params[:id])
           rescue ActiveRecord::RecordNotFound
             render json: { error: "Not found", code: "not_found" }, status: :not_found
           end

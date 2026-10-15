@@ -71,6 +71,47 @@ RSpec.describe "Small Groups admin endpoints", type: :request do
     expect(JSON.parse(response.body)["code"]).to eq("module_disabled")
   end
 
+  context "on a kids-only domain (5ST-57)" do
+    before do
+      church.update!(enabled_modules: %w[kidsmin smallgroups])
+      create(:custom_domain, :verified, church: church, hostname: "kids.example.org", modules: %w[kidsmin])
+      host! "kids.example.org"
+    end
+
+    it "lists only children's groups and group types" do
+      get "/api/v1/admin/groups", headers: auth_headers(admin)
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)
+      expect(body["groups"].map { |g| g["name"] }).to eq(["Rangers"])
+      expect(body["group_types"].map { |t| t["name"] }).to eq(["Kids Groups"])
+    end
+
+    it "404s an adult group" do
+      get "/api/v1/admin/groups/#{@moms.id}", headers: auth_headers(admin)
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "counts only children's groups in the overview" do
+      get "/api/v1/admin/groups_overview", headers: auth_headers(admin)
+
+      body = JSON.parse(response.body)
+      expect(body["groups_count"]).to eq(1)
+      expect(body["needs_attention"]["groups"]).to eq(0)
+    end
+
+    it "shows only children's groups on the schedule" do
+      get "/api/v1/admin/group_schedule", headers: auth_headers(admin)
+      expect(JSON.parse(response.body)["groups"].map { |g| g["name"] }).to eq(["Rangers"])
+    end
+
+    it "404s when the church has Small Groups off" do
+      church.update!(enabled_modules: ["kidsmin"])
+      get "/api/v1/admin/groups", headers: auth_headers(admin)
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
   it "forbids non-admins" do
     account = create(:account)
     create(:membership, church: church, account: account, role: "family")

@@ -13,7 +13,7 @@ module Spirely
           # GET /api/v1/admin/group_schedule?weeks=4
           def show
             weeks  = (params[:weeks] || Spirely::GroupSchedule::WEEKS).to_i
-            groups = Current.church.groups.active.includes(:group_type).order(:name).to_a
+            groups = Current.church.visible_groups.active.includes(:group_type).order(:name).to_a
             data   = groups.to_h { |g| [g, Spirely::GroupSchedule.new(g, weeks: weeks).meetings] }
 
             render json: {

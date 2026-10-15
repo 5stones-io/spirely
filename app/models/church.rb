@@ -9,7 +9,8 @@ class Church < ApplicationRecord
   }.freeze
   KNOWN_MODULES = MODULES.keys.freeze
   # Modules that use the shared Planning Center Groups data (Spirely::Group
-  # & co). Kids Ministry joins this once it shows children's groups.
+  # & co). Kids Ministry doesn't need its own entry: on a kids-only domain
+  # it gets Small Groups limited to children's groups (#children_groups_only?).
   GROUP_MODULES = %w[smallgroups].freeze
   STATUSES = %w[pending approved suspended].freeze
   # Two hand-built Lovable-designed looks for the Public Mini-Site
@@ -95,9 +96,16 @@ class Church < ApplicationRecord
   # module-scoped domain (5ST-12) — e.g. only "smallgroups" on
   # portal.jccag.org. Outside a request (jobs, console) there's no domain,
   # so this is just enabled_modules — the groups sync still runs.
+  #
+  # A kids-only domain also gets Small Groups when the church has it on
+  # (5ST-57), limited to children's groups — see #children_groups_only?.
   def active_modules
     domain = current_domain
-    domain&.restricted? ? enabled_modules & domain.modules : enabled_modules
+    return enabled_modules unless domain&.restricted?
+
+    shown = domain.modules
+    shown |= ["smallgroups"] if shown.include?("kidsmin")
+    enabled_modules & shown
   end
 
   def module_enabled?(name)
@@ -108,6 +116,28 @@ class Church < ApplicationRecord
   # the groups sync and the shared group endpoints.
   def uses_groups?
     (active_modules & GROUP_MODULES).any?
+  end
+
+  # True on a module-scoped domain that has Small Groups only through Kids
+  # Ministry (5ST-57): its group screens show children's groups only.
+  def children_groups_only?
+    domain = current_domain
+    !!domain&.restricted? && !domain.modules.include?("smallgroups")
+  end
+
+  # The groups this request can see — every group, or only those whose
+  # group type is marked children on a kids-only domain. Group endpoints
+  # read through this (and #visible_group_nudges), never #groups directly.
+  def visible_groups
+    return groups unless children_groups_only?
+
+    groups.joins(:group_type).where(spirely_group_types: { audience: "children" })
+  end
+
+  def visible_group_nudges
+    return group_nudges unless children_groups_only?
+
+    group_nudges.where(group_id: visible_groups.select(:id))
   end
 
   # Where links for one module's features should point (e.g. Small Groups

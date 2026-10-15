@@ -36,7 +36,7 @@ module Spirely
     end
 
     # One Health per active group, groups needing attention first.
-    def call(groups = @church.groups.active)
+    def call(groups = @church.visible_groups.active)
       groups = groups.includes(:group_type, memberships: :person, applications: :person).to_a
       groups.map { |g| health_for(g) }
             .sort_by { |h| [h.needs_attention? ? 0 : 1, h.group.name.downcase] }

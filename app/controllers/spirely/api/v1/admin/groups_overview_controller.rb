@@ -50,7 +50,7 @@ module Spirely
           # Attendance follow-ups (5ST-53): what's open, unassigned ones and
           # the oldest first, and this month's outcomes.
           def follow_ups_overview
-            nudges = Current.church.group_nudges
+            nudges = Current.church.visible_group_nudges
             open = nudges.open.includes(:group, :person, :owner_person).order(:created_at).to_a
             month = nudges.resolved.where(resolved_at: Time.current.beginning_of_month..)
             {
