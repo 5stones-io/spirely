@@ -16,6 +16,7 @@ module Spirely
     has_many :group_applications, class_name: "Spirely::GroupApplication", dependent: :destroy
     has_many :group_schedule_assignments, class_name: "Spirely::GroupScheduleAssignment", dependent: :nullify
     has_many :group_nudges, class_name: "Spirely::GroupNudge", dependent: :destroy
+    has_many :points_entries, class_name: "Spirely::PointsEntry", dependent: :destroy
 
     validates :pco_person_id, presence: true, uniqueness: { scope: :church_id }
     validates :first_name, presence: true

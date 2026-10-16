@@ -51,6 +51,9 @@ Spirely::Engine.routes.draw do
       post   "my_groups/slots/:id/respond",              to: "my_groups#respond"
       get    "my_groups/follow_ups/:id",                 to: "my_groups#follow_up"
       post   "my_groups/follow_ups/:id/notes",           to: "my_groups#follow_up_notes"
+      # Kudos (5ST-60): the signed-in adult's and their kids' points.
+      get    "my_points",                                to: "my_points#show"
+
       get    "schedule_responses/:token",                to: "schedule_responses#show"
       post   "schedule_responses/:token",                to: "schedule_responses#create"
 
@@ -94,6 +97,14 @@ Spirely::Engine.routes.draw do
           post :notes, on: :member
         end
         resource  :groups_overview, only: [:show], controller: "groups_overview"
+        # Kudos (5ST-60). People are addressed by Planning Center person id
+        # — someone can get points before they're synced as a Person.
+        get   "kudos",                       to: "kudos#overview"
+        get   "kudos/people",                to: "kudos#people"
+        get   "kudos/people/:pco_person_id", to: "kudos#person", constraints: { pco_person_id: %r{[^/]+} }
+        post  "kudos/entries",               to: "kudos#create_entry"
+        get   "kudos/settings",              to: "kudos#settings"
+        patch "kudos/settings",              to: "kudos#update_settings"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member

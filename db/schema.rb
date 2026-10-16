@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_12_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_15_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -420,6 +420,15 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_12_000001) do
     t.index ["token"], name: "index_spirely_invitations_on_token", unique: true
   end
 
+  create_table "spirely_kudos_settings", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.date "earning_starts_on", null: false
+    t.jsonb "rates", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id"], name: "index_spirely_kudos_settings_on_church_id", unique: true
+  end
+
   create_table "spirely_locations", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.string "pco_location_id", null: false
@@ -446,6 +455,27 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_12_000001) do
     t.datetime "last_checked_in_at"
     t.integer "check_in_count"
     t.index ["church_id", "pco_person_id"], name: "index_spirely_people_on_church_id_and_pco_person_id", unique: true
+  end
+
+  create_table "spirely_points_entries", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "person_id", null: false
+    t.integer "points", null: false
+    t.string "source", null: false
+    t.string "source_type"
+    t.bigint "source_id"
+    t.text "note"
+    t.bigint "awarded_by_account_id"
+    t.string "awarded_by_name"
+    t.date "occurred_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["awarded_by_account_id"], name: "index_spirely_points_entries_on_awarded_by_account_id"
+    t.index ["church_id", "occurred_on"], name: "index_spirely_points_entries_on_church_id_and_occurred_on"
+    t.index ["church_id"], name: "index_spirely_points_entries_on_church_id"
+    t.index ["person_id", "occurred_on"], name: "index_spirely_points_entries_on_person_id_and_occurred_on"
+    t.index ["person_id"], name: "index_spirely_points_entries_on_person_id"
+    t.index ["source_type", "source_id", "person_id"], name: "index_spirely_points_entries_one_per_source", unique: true, where: "(source_id IS NOT NULL)"
   end
 
   create_table "spirely_staff_invitations", force: :cascade do |t|
@@ -561,8 +591,12 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_12_000001) do
   add_foreign_key "spirely_invitations", "churches"
   add_foreign_key "spirely_invitations", "spirely_families", column: "family_id"
   add_foreign_key "spirely_invitations", "spirely_guardians", column: "guardian_id"
+  add_foreign_key "spirely_kudos_settings", "churches"
   add_foreign_key "spirely_locations", "churches"
   add_foreign_key "spirely_people", "churches"
+  add_foreign_key "spirely_points_entries", "accounts", column: "awarded_by_account_id", on_delete: :nullify
+  add_foreign_key "spirely_points_entries", "churches"
+  add_foreign_key "spirely_points_entries", "spirely_people", column: "person_id"
   add_foreign_key "spirely_staff_invitations", "churches"
   add_foreign_key "spirely_sync_settings", "churches"
   add_foreign_key "spirely_tasks", "churches"
