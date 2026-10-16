@@ -6,6 +6,7 @@ class Church < ApplicationRecord
   MODULES = {
     "kidsmin"     => { label: "Kids Ministry" },
     "smallgroups" => { label: "Small Groups" },
+    "kudos"       => { label: "Kudos" },
   }.freeze
   KNOWN_MODULES = MODULES.keys.freeze
   # Modules that use the shared Planning Center Groups data (Spirely::Group
@@ -62,6 +63,8 @@ class Church < ApplicationRecord
   has_many :group_applications, class_name: "Spirely::GroupApplication", dependent: :destroy
   has_many :group_schedule_assignments, class_name: "Spirely::GroupScheduleAssignment", dependent: :destroy
   has_many :group_nudges, class_name: "Spirely::GroupNudge", dependent: :destroy
+  has_many :points_entries, class_name: "Spirely::PointsEntry", dependent: :destroy
+  has_one  :kudos_setting, class_name: "Spirely::KudosSetting", dependent: :destroy
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy
   has_one  :sync_setting, class_name: "Spirely::SyncSetting", dependent: :destroy
 
