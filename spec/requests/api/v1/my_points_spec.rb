@@ -143,4 +143,11 @@ RSpec.describe "/api/v1/my_points", type: :request do
       expect(church.store_orders).to be_empty
     end
   end
+
+  it "lets a parent keep a kid off the leaderboards" do
+    patch "/api/v1/my_points/leaderboard", params: { key: "child-#{emma.id}", opt_out: true }, headers: auth_headers(account), as: :json
+    expect(response).to have_http_status(:ok)
+    expect(json["people"].find { |p| p["first_name"] == "Emma" }["leaderboard_opt_out"]).to be(true)
+    expect(church.people.find_by!(pco_person_id: "emma").kudos_leaderboard_opt_out).to be(true)
+  end
 end

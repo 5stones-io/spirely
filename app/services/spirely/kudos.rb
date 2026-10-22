@@ -85,8 +85,9 @@ module Spirely
     end
 
     # Award (positive) or deduct (negative) points by hand. A deduction
-    # can't take someone below zero.
-    def award!(pco_person_id:, points:, note:, by_account:)
+    # can't take someone below zero. `share` also posts an award on the
+    # recognition feed (5ST-64) — the feed itself keeps kids' ones private.
+    def award!(pco_person_id:, points:, note:, by_account:, share: false)
       points = Integer(points, exception: false)
       raise Error, "Enter a whole number of points." if points.nil? || points.zero?
       raise Error, "That's more than #{MAX_POINTS.to_fs(:delimited)} points at once." if points.abs > MAX_POINTS
@@ -100,11 +101,13 @@ module Spirely
           raise Error, "#{person.first_name} only has #{balance.to_fs(:delimited)} #{balance == 1 ? "point" : "points"}."
         end
 
-        @church.points_entries.create!(
+        entry = @church.points_entries.create!(
           person: person, points: points, source: "manual", note: note.to_s.strip,
           awarded_by_account: by_account, awarded_by_name: by_account&.name.presence || by_account&.email,
           occurred_on: Spirely::ChurchTime.today(@church),
         )
+        Recognition.new(@church).share_award!(entry, by_account: by_account) if share && points.positive?
+        entry
       end
     end
 

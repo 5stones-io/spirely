@@ -70,6 +70,8 @@ class Church < ApplicationRecord
   has_many :store_orders, class_name: "Spirely::StoreOrder", dependent: :delete_all
   has_many :store_codes, class_name: "Spirely::StoreCode", dependent: :delete_all
   has_many :store_items, class_name: "Spirely::StoreItem", dependent: :destroy
+  has_many :shout_outs, class_name: "Spirely::ShoutOut", dependent: :delete_all
+  has_many :service_team_leaders, class_name: "Spirely::ServiceTeamLeader", dependent: :delete_all
   has_many :service_plans, class_name: "Spirely::ServicePlan"
   has_many :service_plan_people, class_name: "Spirely::ServicePlanPerson"
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy

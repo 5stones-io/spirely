@@ -49,6 +49,21 @@ module Spirely
       json
     end
 
+    # A shout-out (5ST-64). Staff also get the people's ids and who hid it.
+    def shout_out_json(shout, staff: false)
+      json = {
+        id: shout.id, from_name: shout.from_name, message: shout.message, visibility: shout.visibility,
+        points: shout.points, created_at: shout.created_at, hidden: shout.hidden?,
+        to: { name: shout.to_person.full_name, first_name: shout.to_person.first_name, kid: !!shout.to_person.child },
+        sent_by_me: Current.account.present? && shout.from_account_id == Current.account.id,
+      }
+      if staff
+        json[:to][:pco_person_id] = shout.to_person.pco_person_id
+        json.merge!(points_from: shout.points_from, hidden_by: shout.hidden_by_name)
+      end
+      json
+    end
+
     def store_image_url(item)
       item.image.attached? ? Rails.application.routes.url_helpers.rails_blob_path(item.image, only_path: true) : nil
     end

@@ -18,6 +18,7 @@ module Spirely
     has_many :group_nudges, class_name: "Spirely::GroupNudge", dependent: :destroy
     has_many :points_entries, class_name: "Spirely::PointsEntry", dependent: :destroy
     has_many :store_orders, class_name: "Spirely::StoreOrder", dependent: :destroy
+    has_many :shout_outs_received, class_name: "Spirely::ShoutOut", foreign_key: :to_person_id, dependent: :delete_all
     has_many :service_plan_people, class_name: "Spirely::ServicePlanPerson", dependent: :delete_all
 
     validates :pco_person_id, presence: true, uniqueness: { scope: :church_id }

@@ -70,6 +70,15 @@ module Spirely
           render json: { error: e.message, code: "validation_error" }, status: :unprocessable_entity
         end
 
+        # PATCH /api/v1/my_points/leaderboard  { key, opt_out }
+        # Keep yourself or one of your kids off the leaderboards (5ST-64).
+        def leaderboard
+          pco_person_id = claim_pco_person_id(params.require(:key).to_s) or return not_matched
+          person = kudos.person_for!(pco_person_id)
+          person.update!(kudos_leaderboard_opt_out: ActiveModel::Type::Boolean.new.cast(params.require(:opt_out)))
+          render json: payload(people_json)
+        end
+
         private
 
         def not_matched
@@ -78,7 +87,8 @@ module Spirely
         end
 
         def payload(people)
-          { family_name: current_family&.family_name, earning_starts_on: kudos.setting.earning_starts_on, people: people }
+          { family_name: current_family&.family_name, earning_starts_on: kudos.setting.earning_starts_on,
+            leaderboards_enabled: kudos.setting.leaderboards_enabled, people: people }
         end
 
         def people_json
@@ -115,6 +125,7 @@ module Spirely
             key: key, relation: relation, first_name: first_name, name: name || person&.full_name || first_name,
             **kudos.totals(person),
             history: person ? kudos.history(person).limit(HISTORY_LIMIT).map { |e| points_entry_json(e) } : [],
+            leaderboard_opt_out: !!person&.kudos_leaderboard_opt_out,
             orders: person ? person.store_orders.newest_first.includes(:codes, item: { image_attachment: :blob }).limit(ORDERS_LIMIT).map { |o| store_order_json(o) } : [],
           }
         end
