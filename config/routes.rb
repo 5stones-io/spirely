@@ -54,6 +54,8 @@ Spirely::Engine.routes.draw do
       # Kudos (5ST-60): the signed-in adult's and their kids' points.
       get    "my_points",                                to: "my_points#show"
       post   "my_points/claim",                          to: "my_points#claim"
+      get    "my_points/store",                          to: "my_points#store"
+      post   "my_points/redeem",                         to: "my_points#redeem"
 
       get    "schedule_responses/:token",                to: "schedule_responses#show"
       post   "schedule_responses/:token",                to: "schedule_responses#create"
@@ -110,6 +112,13 @@ Spirely::Engine.routes.draw do
         get   "kudos/promo_codes",           to: "kudos#promo_codes"
         post  "kudos/promo_codes",           to: "kudos#create_promo_code"
         patch "kudos/promo_codes/:id",       to: "kudos#update_promo_code"
+        get   "kudos/store/items",                 to: "kudos_store#items"
+        post  "kudos/store/items",                 to: "kudos_store#create_item"
+        patch "kudos/store/items/:id",             to: "kudos_store#update_item"
+        get   "kudos/store/orders",                to: "kudos_store#orders"
+        post  "kudos/store/orders/:id/fulfill",    to: "kudos_store#fulfill"
+        post  "kudos/store/orders/:id/cancel",     to: "kudos_store#cancel"
+        post  "kudos/store/checkout",              to: "kudos_store#checkout"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member

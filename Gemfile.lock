@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    spirely (0.21.1)
+    spirely (0.22.0)
       bcrypt (~> 3.1)
       blueprinter
       httparty
