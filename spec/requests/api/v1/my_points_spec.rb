@@ -88,4 +88,59 @@ RSpec.describe "/api/v1/my_points", type: :request do
     get "/api/v1/my_points", headers: auth_headers(account)
     expect(response).to have_http_status(:not_found)
   end
+
+  describe "the store" do
+    let(:shirt) { church.store_items.create!(name: "T-shirt", points: 30, stock: 2) }
+    let(:kids_prize) { church.store_items.create!(name: "Prize box", points: 20, audience: "kids") }
+    let(:coffee) { church.store_items.create!(name: "Coffee", points: 10, kind: "code", instructions: "Show at the café.") }
+
+    before do
+      kudos.award!(pco_person_id: "emma", points: 50, note: "Brought a friend", by_account: staff)
+      Spirely::KudosStore.new(church).add_codes!(coffee, "CAFE-1")
+      shirt && kids_prize
+    end
+
+    it "shows what each person can get" do
+      get "/api/v1/my_points/store", params: { key: "child-#{emma.id}" }, headers: auth_headers(account)
+      expect(json["balance"]).to eq(50)
+      expect(json["items"].map { |i| i["name"] }).to eq(["Coffee", "T-shirt", "Prize box"])
+      expect(json["items"].first).not_to have_key("instructions")
+
+      get "/api/v1/my_points/store", params: { key: "dad" }, headers: auth_headers(account)
+      expect(json["items"].map { |i| i["name"] }).to eq(%w[Coffee T-shirt])
+    end
+
+    it "redeems for a kid, and shows the order and any code in their history" do
+      post "/api/v1/my_points/redeem", params: { key: "child-#{emma.id}", item_id: coffee.id }, headers: auth_headers(account), as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(json["redeemed"]["order"]).to include("status" => "fulfilled", "codes" => ["CAFE-1"],
+                                                    "instructions" => "Show at the café.")
+      kid = json["people"].find { |p| p["first_name"] == "Emma" }
+      expect(kid["balance"]).to eq(40)
+      expect(kid["orders"].first).to include("codes" => ["CAFE-1"])
+
+      coffee.update!(per_person_limit: 1)
+      get "/api/v1/my_points/store", params: { key: "child-#{emma.id}" }, headers: auth_headers(account)
+      expect(json["items"].find { |i| i["name"] == "Coffee" }).to include("limit_left" => 0)
+      expect(json["items"].find { |i| i["name"] == "T-shirt" }).to include("limit_left" => nil)
+    end
+
+    it "says why when they can't afford it" do
+      post "/api/v1/my_points/redeem", params: { key: "dad", item_id: shirt.id }, headers: auth_headers(account), as: :json
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(json["error"]).to eq("Mark has 0 points — that's 30.")
+    end
+
+    it "won't spend another family's kid's points" do
+      other = create(:spirely_family, church: church, pco_person_id: "other")
+      liam = create(:spirely_child, family: other, first_name: "Liam", pco_person_id: "liam")
+      kudos.award!(pco_person_id: "liam", points: 100, note: "x", by_account: staff)
+
+      post "/api/v1/my_points/redeem", params: { key: "child-#{liam.id}", item_id: shirt.id }, headers: auth_headers(account), as: :json
+
+      expect(response).to have_http_status(:not_found)
+      expect(church.store_orders).to be_empty
+    end
+  end
 end

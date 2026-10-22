@@ -3,7 +3,7 @@ module Spirely
   # positive for earned, negative for spent or deducted. Entries are never
   # edited — a mistake is fixed with a deduction, so history stays honest.
   class PointsEntry < ApplicationRecord
-    SOURCES = %w[manual checkin group_attendance service promo_code shout_out redemption adjustment].freeze
+    SOURCES = %w[manual checkin group_attendance service promo_code shout_out redemption refund adjustment].freeze
 
     belongs_to :church
     belongs_to :person, class_name: "Spirely::Person"

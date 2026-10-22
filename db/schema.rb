@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_22_000003) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -578,6 +578,63 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000003) do
     t.index ["token"], name: "index_spirely_staff_invitations_on_token", unique: true
   end
 
+  create_table "spirely_store_codes", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "item_id", null: false
+    t.string "code", null: false
+    t.bigint "order_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id"], name: "index_spirely_store_codes_on_church_id"
+    t.index ["item_id", "code"], name: "index_spirely_store_codes_on_item_id_and_code", unique: true
+    t.index ["item_id", "order_id"], name: "index_spirely_store_codes_on_item_id_and_order_id"
+    t.index ["item_id"], name: "index_spirely_store_codes_on_item_id"
+    t.index ["order_id"], name: "index_spirely_store_codes_on_order_id"
+  end
+
+  create_table "spirely_store_items", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "name", null: false
+    t.text "description"
+    t.integer "points", null: false
+    t.string "kind", default: "physical", null: false
+    t.integer "stock"
+    t.text "instructions"
+    t.integer "per_person_limit"
+    t.string "audience", default: "everyone", null: false
+    t.datetime "hidden_at"
+    t.integer "position", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "position"], name: "index_spirely_store_items_on_church_id_and_position"
+    t.index ["church_id"], name: "index_spirely_store_items_on_church_id"
+  end
+
+  create_table "spirely_store_orders", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "person_id", null: false
+    t.bigint "item_id", null: false
+    t.integer "quantity", default: 1, null: false
+    t.integer "points", null: false
+    t.string "status", null: false
+    t.string "channel", null: false
+    t.bigint "placed_by_account_id"
+    t.string "placed_by_name"
+    t.datetime "fulfilled_at"
+    t.string "fulfilled_by_name"
+    t.datetime "cancelled_at"
+    t.string "cancelled_by_name"
+    t.bigint "refund_entry_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "status", "created_at"], name: "idx_on_church_id_status_created_at_32f79c164b"
+    t.index ["church_id"], name: "index_spirely_store_orders_on_church_id"
+    t.index ["item_id"], name: "index_spirely_store_orders_on_item_id"
+    t.index ["person_id"], name: "index_spirely_store_orders_on_person_id"
+    t.index ["placed_by_account_id"], name: "index_spirely_store_orders_on_placed_by_account_id"
+    t.index ["refund_entry_id"], name: "index_spirely_store_orders_on_refund_entry_id"
+  end
+
   create_table "spirely_sync_settings", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.boolean "inbound_people_sync", default: true, null: false
@@ -695,6 +752,15 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000003) do
   add_foreign_key "spirely_service_plans", "spirely_service_types", column: "service_type_id"
   add_foreign_key "spirely_service_types", "churches"
   add_foreign_key "spirely_staff_invitations", "churches"
+  add_foreign_key "spirely_store_codes", "churches"
+  add_foreign_key "spirely_store_codes", "spirely_store_items", column: "item_id", on_delete: :cascade
+  add_foreign_key "spirely_store_codes", "spirely_store_orders", column: "order_id"
+  add_foreign_key "spirely_store_items", "churches"
+  add_foreign_key "spirely_store_orders", "accounts", column: "placed_by_account_id", on_delete: :nullify
+  add_foreign_key "spirely_store_orders", "churches"
+  add_foreign_key "spirely_store_orders", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_store_orders", "spirely_points_entries", column: "refund_entry_id", on_delete: :nullify
+  add_foreign_key "spirely_store_orders", "spirely_store_items", column: "item_id"
   add_foreign_key "spirely_sync_settings", "churches"
   add_foreign_key "spirely_tasks", "churches"
   add_foreign_key "spirely_tasks", "memberships", column: "assignee_membership_id", on_delete: :nullify
