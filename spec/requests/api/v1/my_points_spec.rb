@@ -119,6 +119,11 @@ RSpec.describe "/api/v1/my_points", type: :request do
       kid = json["people"].find { |p| p["first_name"] == "Emma" }
       expect(kid["balance"]).to eq(40)
       expect(kid["orders"].first).to include("codes" => ["CAFE-1"])
+
+      coffee.update!(per_person_limit: 1)
+      get "/api/v1/my_points/store", params: { key: "child-#{emma.id}" }, headers: auth_headers(account)
+      expect(json["items"].find { |i| i["name"] == "Coffee" }).to include("limit_left" => 0)
+      expect(json["items"].find { |i| i["name"] == "T-shirt" }).to include("limit_left" => nil)
     end
 
     it "says why when they can't afford it" do

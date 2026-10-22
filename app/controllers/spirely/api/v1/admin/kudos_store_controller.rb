@@ -49,7 +49,7 @@ module Spirely
           # GET /api/v1/admin/kudos/store/orders?status=pending|all&page=
           # Pending is the pickup queue, oldest first; all is newest first.
           def orders
-            scope = Current.church.store_orders.includes(:item, :person, :codes)
+            scope = Current.church.store_orders.includes(:person, :codes, item: { image_attachment: :blob })
             scope = params[:status] == "all" ? scope.newest_first : scope.pending.order(:created_at, :id)
             page = scope.page(params[:page]).per(ORDERS_PER_PAGE)
             render json: {

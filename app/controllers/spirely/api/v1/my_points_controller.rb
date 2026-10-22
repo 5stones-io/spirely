@@ -41,16 +41,18 @@ module Spirely
         end
 
         # GET /api/v1/my_points/store?key=
-        # What that person can get, and their balance.
+        # What that person can get, and their balance. limit_left is how
+        # many more of a limited item they can have (nil when unlimited).
         def store
           key = params.require(:key).to_s
           pco_person_id = claim_pco_person_id(key) or return not_matched
           kid = key.start_with?("child-")
           person = Current.church.people.find_by(pco_person_id: pco_person_id)
-          render json: {
-            key: key, balance: kudos.totals(person)[:balance],
-            items: Spirely::KudosStore.new(Current.church).items_for(kid: kid).map { |i| store_item_json(i) },
-          }
+          had = person ? person.store_orders.not_cancelled.group(:item_id).sum(:quantity) : {}
+          items = Spirely::KudosStore.new(Current.church).items_for(kid: kid).map do |i|
+            store_item_json(i).merge(limit_left: i.per_person_limit && [i.per_person_limit - had.fetch(i.id, 0), 0].max)
+          end
+          render json: { key: key, balance: kudos.totals(person)[:balance], items: items }
         end
 
         # POST /api/v1/my_points/redeem  { key, item_id, quantity }
@@ -113,7 +115,7 @@ module Spirely
             key: key, relation: relation, first_name: first_name, name: name || person&.full_name || first_name,
             **kudos.totals(person),
             history: person ? kudos.history(person).limit(HISTORY_LIMIT).map { |e| points_entry_json(e) } : [],
-            orders: person ? person.store_orders.newest_first.includes(:item, :codes).limit(ORDERS_LIMIT).map { |o| store_order_json(o) } : [],
+            orders: person ? person.store_orders.newest_first.includes(:codes, item: { image_attachment: :blob }).limit(ORDERS_LIMIT).map { |o| store_order_json(o) } : [],
           }
         end
       end
