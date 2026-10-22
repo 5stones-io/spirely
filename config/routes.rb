@@ -53,6 +53,7 @@ Spirely::Engine.routes.draw do
       post   "my_groups/follow_ups/:id/notes",           to: "my_groups#follow_up_notes"
       # Kudos (5ST-60): the signed-in adult's and their kids' points.
       get    "my_points",                                to: "my_points#show"
+      post   "my_points/claim",                          to: "my_points#claim"
 
       get    "schedule_responses/:token",                to: "schedule_responses#show"
       post   "schedule_responses/:token",                to: "schedule_responses#create"
@@ -105,6 +106,10 @@ Spirely::Engine.routes.draw do
         post  "kudos/entries",               to: "kudos#create_entry"
         get   "kudos/settings",              to: "kudos#settings"
         patch "kudos/settings",              to: "kudos#update_settings"
+        # Promo codes (5ST-61).
+        get   "kudos/promo_codes",           to: "kudos#promo_codes"
+        post  "kudos/promo_codes",           to: "kudos#create_promo_code"
+        patch "kudos/promo_codes/:id",       to: "kudos#update_promo_code"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member

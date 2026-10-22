@@ -51,6 +51,8 @@ module Spirely
       settings.update!(groups_last_synced_at: Time.current, groups_access_denied_at: nil)
       # Fresh attendance in hand — refresh attendance follow-ups (5ST-53).
       Spirely::GroupNudgeSyncJob.perform_later(church.id)
+      # …and post Kudos points for meetings attended (5ST-61).
+      Spirely::KudosEarningJob.perform_later(church.id) if church.module_enabled?("kudos")
     rescue Spirely::PcoApiError => e
       raise unless e.status == 403
 

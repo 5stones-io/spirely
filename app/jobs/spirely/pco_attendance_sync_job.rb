@@ -35,6 +35,8 @@ module Spirely
       check_ins.each { |ci| sync_check_in(church, ci, people, event_periods, events, check_in_times, locations) }
 
       Rails.logger.info("[Spirely] PcoAttendanceSyncJob complete for church #{church_id} — #{check_ins.size} check-ins")
+      # Fresh check-ins in hand — post their Kudos points (5ST-61).
+      Spirely::KudosEarningJob.perform_later(church.id) if church.module_enabled?("kudos")
     rescue Spirely::PcoError => e
       Rails.logger.error("[Spirely] PcoAttendanceSyncJob failed for church #{church_id}: #{e.message}")
       raise

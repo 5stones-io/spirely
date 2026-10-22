@@ -1,6 +1,15 @@
 require "rails_helper"
 
 RSpec.describe "/api/v1/admin/kudos", type: :request do
+  include ActiveJob::TestHelper
+  around do |ex|
+    original = ActiveJob::Base.queue_adapter
+    ActiveJob::Base.queue_adapter = :test
+    ex.run
+  ensure
+    ActiveJob::Base.queue_adapter = original
+  end
+
   let(:church) { create(:church, enabled_modules: ["kudos"]) }
   let(:admin)  { create(:account, first_name: "Pastor", last_name: "Mike").tap { |a| create(:membership, :admin, church: church, account: a) } }
   let!(:sarah) { create(:spirely_person, church: church, first_name: "Sarah", last_name: "Mitchell", pco_person_id: "p1") }
@@ -68,8 +77,62 @@ RSpec.describe "/api/v1/admin/kudos", type: :request do
 
   it "updates the earning start date" do
     patch "/api/v1/admin/kudos/settings", params: { earning_starts_on: "2026-09-01" }, headers: auth_headers(admin), as: :json
-    expect(json).to eq("earning_starts_on" => "2026-09-01")
+    expect(json).to include("earning_starts_on" => "2026-09-01")
     expect(church.kudos_setting.earning_starts_on).to eq(Date.new(2026, 9, 1))
+  end
+
+  it "sets earning rates, including per-event ones, and posts points owed at the new rates" do
+    create(:spirely_attendance, church: church, person: emma, pco_event_id: "wed", event_name: "Rangers")
+
+    patch "/api/v1/admin/kudos/settings",
+          params: { checkin_points: 10, group_points: 5, event_rates: [{ pco_event_id: "wed", points: 20 }] },
+          headers: auth_headers(admin), as: :json
+
+    expect(response).to have_http_status(:ok)
+    expect(json).to include("checkin_points" => 10, "group_points" => 5)
+    expect(json["event_rates"]).to eq([{ "pco_event_id" => "wed", "event_name" => "Rangers", "points" => 20 }])
+    expect(json["events"].map { |e| e["event_name"] }).to eq(["Rangers"])
+    expect(Spirely::KudosEarningJob).to have_been_enqueued.with(church.id)
+
+    perform_enqueued_jobs
+    expect(Spirely::Kudos.new(church).totals(emma)[:balance]).to eq(20)
+  end
+
+  it "rejects a rate that isn't a whole number from 0 up" do
+    patch "/api/v1/admin/kudos/settings", params: { checkin_points: -5 }, headers: auth_headers(admin), as: :json
+    expect(response).to have_http_status(:unprocessable_entity)
+
+    patch "/api/v1/admin/kudos/settings", params: { checkin_points: "lots" }, headers: auth_headers(admin), as: :json
+    expect(response).to have_http_status(:unprocessable_entity)
+  end
+
+  describe "promo codes" do
+    it "creates, lists with uses, and turns off a code" do
+      post "/api/v1/admin/kudos/promo_codes", params: { code: "fall-fest", label: "Fall Fest", points: 25, max_uses: 2 },
+           headers: auth_headers(admin), as: :json
+      expect(response).to have_http_status(:created)
+      expect(json).to include("code" => "FALL-FEST", "status" => "active", "uses" => 0, "created_by" => "Pastor Mike")
+      id = json["id"]
+
+      Spirely::Kudos.new(church).claim_code!(code: "fall-fest", pco_person_id: "p1")
+      get "/api/v1/admin/kudos/promo_codes", headers: auth_headers(admin)
+      expect(json["promo_codes"].first).to include("uses" => 1, "points_given" => 25)
+
+      patch "/api/v1/admin/kudos/promo_codes/#{id}", params: { active: false }, headers: auth_headers(admin), as: :json
+      expect(json["status"]).to eq("off")
+      patch "/api/v1/admin/kudos/promo_codes/#{id}", params: { active: true }, headers: auth_headers(admin), as: :json
+      expect(json["status"]).to eq("active")
+    end
+
+    it "makes up a code when none is given, and refuses a duplicate" do
+      post "/api/v1/admin/kudos/promo_codes", params: { label: "Welcome", points: 10 }, headers: auth_headers(admin), as: :json
+      expect(json["code"]).to match(/\A[A-Z2-9]{6}\z/)
+
+      post "/api/v1/admin/kudos/promo_codes", params: { code: json["code"].downcase, label: "Again", points: 10 },
+           headers: auth_headers(admin), as: :json
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(json["error"]).to match(/already used/)
+    end
   end
 
   it "is admin-only" do

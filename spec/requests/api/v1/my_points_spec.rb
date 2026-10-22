@@ -45,6 +45,44 @@ RSpec.describe "/api/v1/my_points", type: :request do
     expect(json["people"].map { |p| p["relation"] }).to eq(["you"])
   end
 
+  describe "claiming a promo code" do
+    before { church.promo_codes.create!(code: "BRING-A-FRIEND", label: "Brought a friend", points: 30) }
+
+    it "claims for yourself or one of your kids, and answers with fresh balances" do
+      post "/api/v1/my_points/claim", params: { code: "bring-a-friend", key: "child-#{emma.id}" },
+           headers: auth_headers(account), as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(json["claimed"]).to include("points" => 30, "note" => "Brought a friend")
+      expect(json["people"].find { |p| p["first_name"] == "Emma" }["balance"]).to eq(30)
+
+      post "/api/v1/my_points/claim", params: { code: "bring-a-friend", key: "dad" }, headers: auth_headers(account), as: :json
+      expect(json["people"].first["balance"]).to eq(30)
+    end
+
+    it "says so when they've already used it" do
+      2.times do
+        post "/api/v1/my_points/claim", params: { code: "BRING-A-FRIEND", key: "dad" }, headers: auth_headers(account), as: :json
+      end
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(json["error"]).to match(/already used/)
+    end
+
+    it "won't claim for another family's kid or a kid not in Planning Center" do
+      other = create(:spirely_family, church: church, pco_person_id: "other")
+      liam = create(:spirely_child, family: other, first_name: "Liam", pco_person_id: "liam")
+
+      post "/api/v1/my_points/claim", params: { code: "BRING-A-FRIEND", key: "child-#{liam.id}" },
+           headers: auth_headers(account), as: :json
+      expect(response).to have_http_status(:not_found)
+
+      post "/api/v1/my_points/claim", params: { code: "BRING-A-FRIEND", key: "child-#{noah.id}" },
+           headers: auth_headers(account), as: :json
+      expect(response).to have_http_status(:not_found)
+      expect(church.points_entries.count).to eq(0)
+    end
+  end
+
   it "404s when Kudos is off" do
     church.update!(enabled_modules: [])
     get "/api/v1/my_points", headers: auth_headers(account)

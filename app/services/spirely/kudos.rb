@@ -119,6 +119,55 @@ module Spirely
       @church.people.find_by!(pco_person_id: pco_person_id)
     end
 
+    # Posts points for check-ins and group meetings attended since the
+    # earning start date (5ST-61), at the church's rates. Safe to run after
+    # every sync: each check-in and each meeting pays a person at most
+    # once, and a rate of 0 posts nothing. Points already posted stay put
+    # if PCO later drops the record — they may have been spent. Returns
+    # how many entries it posted.
+    def post_attendance_points!
+      return 0 unless @church.module_enabled?("kudos")
+
+      setting = self.setting
+      return 0 unless setting.earns_anything?
+
+      zone  = ChurchTime.zone(@church)
+      since = setting.earning_starts_on.in_time_zone(zone)
+      rows  = checkin_rows(setting, since, zone) + group_rows(setting, since, zone)
+      rows.each_slice(500).sum { |slice| PointsEntry.insert_all(slice).length }
+    end
+
+    # Claim a promo code for someone (5ST-61). Codes are case-insensitive
+    # and each person can claim a code once.
+    def claim_code!(code:, pco_person_id:)
+      normalized = PromoCode.normalize(code) or raise Error, "Enter a code."
+
+      PointsEntry.transaction do
+        promo = @church.promo_codes.lock.find_by(code: normalized)
+        raise Error, "That code doesn't match any we have. Check the spelling?" unless promo
+        raise Error, "That code isn't active right now." if promo.turned_off?
+        raise Error, "That code expired on #{promo.expires_on.to_fs(:long)}." if promo.expired?(ChurchTime.today(@church))
+        raise Error, "That code has been used up." if promo.max_uses && promo.claims.count >= promo.max_uses
+
+        person = person_for!(pco_person_id)
+        raise Error, "#{person.first_name} already used this code." if promo.claims.exists?(person_id: person.id)
+
+        @church.points_entries.create!(
+          person: person, points: promo.points, source: "promo_code", source_type: promo.class.polymorphic_name,
+          source_id: promo.id, note: promo.label, occurred_on: ChurchTime.today(@church),
+        )
+      end
+    end
+
+    # Check-Ins events seen in the last 16 weeks (the attendance sync's
+    # window), most-attended first — what per-event rates are picked from.
+    def checkin_events
+      @church.attendances.where(checked_in_at: PcoAttendanceSyncJob::SYNC_WINDOW.ago..)
+             .group(:pco_event_id).order(Arel.sql("COUNT(*) DESC"))
+             .pluck(:pco_event_id, Arel.sql("MAX(event_name)"), Arel.sql("COUNT(*)"))
+             .map { |id, name, count| { pco_event_id: id, event_name: name, check_ins: count } }
+    end
+
     # The adults in a kid's household (for "their parents can see this").
     def parents_of(recipient)
       family = recipient.family
@@ -130,6 +179,52 @@ module Spirely
     end
 
     private
+
+    # One entry per person per event per day, so a kid checked in twice by
+    # mistake (or re-printed labels) only earns once. One-time guests are
+    # skipped — they have no Planning Center profile to earn against.
+    def checkin_rows(setting, since, zone)
+      attendances = @church.attendances.where(one_time_guest: false, checked_in_at: since..).order(:id)
+                           .pluck(:id, :person_id, :pco_event_id, :event_name, :checked_in_at)
+      return [] if attendances.empty?
+
+      paid = @church.points_entries.where(source_type: Attendance.polymorphic_name, source_id: attendances.map(&:first))
+                    .pluck(:source_id).to_set
+
+      attendances.group_by { |_, person_id, event_id, _, at| [person_id, event_id, at.in_time_zone(zone).to_date] }
+                 .filter_map do |(person_id, event_id, day), same_day|
+        next if same_day.any? { |id, *| paid.include?(id) }
+
+        points = setting.points_for_checkin(event_id)
+        next unless points.positive?
+
+        id, _, _, event_name, _ = same_day.first
+        entry_row(person_id, points, "checkin", Attendance.polymorphic_name, id, "Checked in · #{event_name}", day)
+      end
+    end
+
+    # Keyed on the meeting rather than the attendance row, since the groups
+    # sync replaces rows PCO no longer returns.
+    def group_rows(setting, since, zone)
+      return [] unless setting.group_points.positive?
+
+      @church.group_attendances.where(attended: true).joins(group_event: :group).merge(GroupEvent.held)
+             .where(spirely_group_events: { starts_at: since..Time.current })
+             .where.not(PointsEntry.where(source_type: GroupEvent.polymorphic_name)
+                                   .where("spirely_points_entries.source_id = spirely_group_attendances.group_event_id")
+                                   .where("spirely_points_entries.person_id = spirely_group_attendances.person_id")
+                                   .arel.exists)
+             .pluck(:person_id, :group_event_id, "spirely_group_events.starts_at", "spirely_groups.name")
+             .map do |person_id, event_id, starts_at, group_name|
+        entry_row(person_id, setting.group_points, "group_attendance", GroupEvent.polymorphic_name, event_id,
+                  "Attended #{group_name}", starts_at.in_time_zone(zone).to_date)
+      end
+    end
+
+    def entry_row(person_id, points, source, source_type, source_id, note, day)
+      { church_id: @church.id, person_id: person_id, points: points, source: source, source_type: source_type,
+        source_id: source_id, note: note, occurred_on: day }
+    end
 
     def search(scope, first_col, last_col, query, pco_ids, limit)
       table = scope.klass.table_name

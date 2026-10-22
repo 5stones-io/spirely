@@ -4,7 +4,8 @@ module Spirely
       module Admin
         # Staff Kudos screens (5ST-60): the overview, the people list, one
         # person's balance and history, awarding or deducting points by
-        # hand, and Settings → Kudos. Admins only. People are addressed by
+        # hand, promo codes (5ST-61) and Settings → Kudos, including the
+        # earning rates (5ST-61). Admins only. People are addressed by
         # their Planning Center person id, since someone can get points
         # before they've been synced as a Spirely::Person.
         class KudosController < BaseController
@@ -86,15 +87,98 @@ module Spirely
             render json: settings_json
           end
 
-          # PATCH /api/v1/admin/kudos/settings  { earning_starts_on }
+          # PATCH /api/v1/admin/kudos/settings
+          #   { earning_starts_on, checkin_points, group_points, event_rates: [{ pco_event_id, points }] }
+          # Any subset. event_rates replaces every per-event rate. Points for
+          # attendance not yet paid follow straight away at the new rates.
           def update_settings
-            kudos.setting.update!(earning_starts_on: Date.iso8601(params.require(:earning_starts_on)))
+            setting = kudos.setting
+            setting.earning_starts_on = Date.iso8601(params[:earning_starts_on]) if params.key?(:earning_starts_on)
+            rates = setting.rates.dup
+            rates["checkin"] = rate_param(:checkin_points) if params.key?(:checkin_points)
+            rates["group_attendance"] = rate_param(:group_points) if params.key?(:group_points)
+            if params.key?(:event_rates)
+              rates["checkin_events"] = Array(params[:event_rates]).to_h do |r|
+                [r.require(:pco_event_id).to_s, rate_value(r[:points])]
+              end
+            end
+            setting.update!(rates: rates)
+            Spirely::KudosEarningJob.perform_later(Current.church.id)
             render json: settings_json
+          end
+
+          # GET /api/v1/admin/kudos/promo_codes
+          def promo_codes
+            codes = Current.church.promo_codes.order(created_at: :desc)
+            uses = Current.church.points_entries.where(source: "promo_code", source_type: Spirely::PromoCode.polymorphic_name)
+                          .group(:source_id).count
+            render json: { promo_codes: codes.map { |c| promo_code_json(c, uses.fetch(c.id, 0)) } }
+          end
+
+          # POST /api/v1/admin/kudos/promo_codes  { code?, label, points, max_uses?, expires_on? }
+          # A blank code gets a random one.
+          def create_promo_code
+            code = Current.church.promo_codes.new(
+              promo_code_params.merge(created_by_account: Current.account,
+                                      created_by_name: Current.account&.name.presence || Current.account&.email),
+            )
+            code.code = Spirely::PromoCode.generate_code if code.code.blank?
+            code.save!
+            render json: promo_code_json(code, 0), status: :created
+          end
+
+          # PATCH /api/v1/admin/kudos/promo_codes/:id  { label?, max_uses?, expires_on?, active? }
+          # The code and its points can't change once made — people may
+          # already have claimed it.
+          def update_promo_code
+            code = Current.church.promo_codes.find(params[:id])
+            code.assign_attributes(promo_code_params.except(:code, :points))
+            if params.key?(:active)
+              code.turned_off_at = ActiveModel::Type::Boolean.new.cast(params[:active]) ? nil : (code.turned_off_at || Time.current)
+            end
+            code.save!
+            render json: promo_code_json(code, code.claims.count)
           end
 
           private
 
-          def settings_json = { earning_starts_on: kudos.setting.earning_starts_on }
+          def settings_json
+            setting = kudos.setting
+            names = kudos.checkin_events.index_by { |e| e[:pco_event_id] }
+            {
+              earning_starts_on: setting.earning_starts_on,
+              checkin_points: setting.checkin_points,
+              group_points: setting.group_points,
+              groups_synced: Current.church.uses_groups?,
+              event_rates: setting.checkin_event_points.map do |id, points|
+                { pco_event_id: id, event_name: names.dig(id, :event_name) || "Event no longer in Check-Ins", points: points }
+              end,
+              events: names.values,
+            }
+          end
+
+          def rate_param(key) = rate_value(params[key])
+
+          # Whole numbers only; the setting validates the range.
+          def rate_value(value)
+            Integer(value.to_s, exception: false) or raise Spirely::Kudos::Error, "Points must be a whole number."
+          end
+
+          def promo_code_params
+            attrs = params.permit(:code, :label, :points, :max_uses, :expires_on).to_h.symbolize_keys
+            attrs[:max_uses] = attrs[:max_uses].presence if attrs.key?(:max_uses)
+            attrs[:expires_on] = attrs[:expires_on].presence && Date.iso8601(attrs[:expires_on]) if attrs.key?(:expires_on)
+            attrs
+          end
+
+          def promo_code_json(code, uses)
+            {
+              id: code.id, code: code.code, label: code.label, points: code.points, max_uses: code.max_uses,
+              uses: uses, points_given: uses * code.points, expires_on: code.expires_on,
+              status: code.status(today: Spirely::ChurchTime.today(Current.church), uses: uses),
+              created_by: code.created_by_name, created_at: code.created_at,
+            }
+          end
 
           def rows_for(recipients)
             people = recipients.filter_map(&:person)
