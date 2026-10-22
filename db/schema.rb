@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_15_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -478,6 +478,23 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_15_000001) do
     t.index ["source_type", "source_id", "person_id"], name: "index_spirely_points_entries_one_per_source", unique: true, where: "(source_id IS NOT NULL)"
   end
 
+  create_table "spirely_promo_codes", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "code", null: false
+    t.string "label", null: false
+    t.integer "points", null: false
+    t.integer "max_uses"
+    t.date "expires_on"
+    t.datetime "turned_off_at"
+    t.bigint "created_by_account_id"
+    t.string "created_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "code"], name: "index_spirely_promo_codes_on_church_id_and_code", unique: true
+    t.index ["church_id"], name: "index_spirely_promo_codes_on_church_id"
+    t.index ["created_by_account_id"], name: "index_spirely_promo_codes_on_created_by_account_id"
+  end
+
   create_table "spirely_staff_invitations", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.string "token", null: false
@@ -597,6 +614,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_15_000001) do
   add_foreign_key "spirely_points_entries", "accounts", column: "awarded_by_account_id", on_delete: :nullify
   add_foreign_key "spirely_points_entries", "churches"
   add_foreign_key "spirely_points_entries", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_promo_codes", "accounts", column: "created_by_account_id", on_delete: :nullify
+  add_foreign_key "spirely_promo_codes", "churches"
   add_foreign_key "spirely_staff_invitations", "churches"
   add_foreign_key "spirely_sync_settings", "churches"
   add_foreign_key "spirely_tasks", "churches"
