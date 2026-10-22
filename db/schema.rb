@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_22_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -426,6 +426,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
     t.jsonb "rates", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "count_rehearsals", default: false, null: false
     t.index ["church_id"], name: "index_spirely_kudos_settings_on_church_id", unique: true
   end
 
@@ -470,6 +471,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
     t.date "occurred_on", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "details"
     t.index ["awarded_by_account_id"], name: "index_spirely_points_entries_on_awarded_by_account_id"
     t.index ["church_id", "occurred_on"], name: "index_spirely_points_entries_on_church_id_and_occurred_on"
     t.index ["church_id"], name: "index_spirely_points_entries_on_church_id"
@@ -493,6 +495,71 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
     t.index ["church_id", "code"], name: "index_spirely_promo_codes_on_church_id_and_code", unique: true
     t.index ["church_id"], name: "index_spirely_promo_codes_on_church_id"
     t.index ["created_by_account_id"], name: "index_spirely_promo_codes_on_created_by_account_id"
+  end
+
+  create_table "spirely_service_plan_people", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "plan_id", null: false
+    t.bigint "person_id", null: false
+    t.string "pco_plan_person_id", null: false
+    t.string "pco_team_id"
+    t.string "team_name"
+    t.string "position_name"
+    t.string "status", null: false
+    t.string "declined_time_ids", default: [], null: false, array: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "person_id"], name: "index_spirely_service_plan_people_on_church_id_and_person_id"
+    t.index ["church_id"], name: "index_spirely_service_plan_people_on_church_id"
+    t.index ["person_id"], name: "index_spirely_service_plan_people_on_person_id"
+    t.index ["plan_id", "pco_plan_person_id"], name: "idx_on_plan_id_pco_plan_person_id_1c110c9309", unique: true
+    t.index ["plan_id"], name: "index_spirely_service_plan_people_on_plan_id"
+  end
+
+  create_table "spirely_service_plan_times", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "plan_id", null: false
+    t.string "pco_plan_time_id", null: false
+    t.string "name"
+    t.string "time_type", null: false
+    t.datetime "starts_at", null: false
+    t.datetime "ends_at", null: false
+    t.string "team_ids", array: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id"], name: "index_spirely_service_plan_times_on_church_id"
+    t.index ["plan_id", "pco_plan_time_id"], name: "idx_on_plan_id_pco_plan_time_id_42673c4193", unique: true
+    t.index ["plan_id"], name: "index_spirely_service_plan_times_on_plan_id"
+  end
+
+  create_table "spirely_service_plans", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "service_type_id", null: false
+    t.string "pco_plan_id", null: false
+    t.string "title"
+    t.string "series_title"
+    t.string "dates"
+    t.datetime "sort_date"
+    t.datetime "ends_at"
+    t.datetime "people_synced_at"
+    t.datetime "removed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_plan_id"], name: "index_spirely_service_plans_on_church_id_and_pco_plan_id", unique: true
+    t.index ["church_id", "sort_date"], name: "index_spirely_service_plans_on_church_id_and_sort_date"
+    t.index ["church_id"], name: "index_spirely_service_plans_on_church_id"
+    t.index ["service_type_id"], name: "index_spirely_service_plans_on_service_type_id"
+  end
+
+  create_table "spirely_service_types", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "pco_service_type_id", null: false
+    t.string "name", null: false
+    t.datetime "removed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_service_type_id"], name: "idx_on_church_id_pco_service_type_id_36903e8659", unique: true
+    t.index ["church_id"], name: "index_spirely_service_types_on_church_id"
   end
 
   create_table "spirely_staff_invitations", force: :cascade do |t|
@@ -527,6 +594,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
     t.datetime "updated_at", null: false
     t.datetime "groups_last_synced_at"
     t.datetime "groups_access_denied_at"
+    t.datetime "services_last_synced_at"
+    t.datetime "services_access_denied_at"
     t.index ["church_id"], name: "index_spirely_sync_settings_on_church_id", unique: true
   end
 
@@ -616,6 +685,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000001) do
   add_foreign_key "spirely_points_entries", "spirely_people", column: "person_id"
   add_foreign_key "spirely_promo_codes", "accounts", column: "created_by_account_id", on_delete: :nullify
   add_foreign_key "spirely_promo_codes", "churches"
+  add_foreign_key "spirely_service_plan_people", "churches"
+  add_foreign_key "spirely_service_plan_people", "spirely_people", column: "person_id"
+  add_foreign_key "spirely_service_plan_people", "spirely_service_plans", column: "plan_id", on_delete: :cascade
+  add_foreign_key "spirely_service_plan_times", "churches"
+  add_foreign_key "spirely_service_plan_times", "spirely_service_plans", column: "plan_id", on_delete: :cascade
+  add_foreign_key "spirely_service_plans", "churches"
+  add_foreign_key "spirely_service_plans", "spirely_service_types", column: "service_type_id"
+  add_foreign_key "spirely_service_types", "churches"
   add_foreign_key "spirely_staff_invitations", "churches"
   add_foreign_key "spirely_sync_settings", "churches"
   add_foreign_key "spirely_tasks", "churches"

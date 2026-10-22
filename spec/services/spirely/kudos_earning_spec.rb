@@ -1,6 +1,7 @@
 require "rails_helper"
 
-# Kudos phase 2 (5ST-61): points from check-ins, group meetings and promo codes.
+# Kudos phase 2 (5ST-61): points from check-ins, group meetings and promo
+# codes. Phase 3 (5ST-62): points for time served on Services plans.
 RSpec.describe Spirely::Kudos do
   let(:church)  { create(:church, enabled_modules: %w[kudos smallgroups]) }
   let(:kudos)   { described_class.new(church) }
@@ -16,7 +17,7 @@ RSpec.describe Spirely::Kudos do
 
   def balance(person) = kudos.totals(person)[:balance]
 
-  describe "#post_attendance_points!" do
+  describe "#post_earned_points!" do
     context "check-ins" do
       before { setting.update!(rates: { "checkin" => 10 }) }
 
@@ -24,15 +25,15 @@ RSpec.describe Spirely::Kudos do
         check_in(emma)
         check_in(mark)
 
-        expect(kudos.post_attendance_points!).to eq(2)
-        expect(kudos.post_attendance_points!).to eq(0)
+        expect(kudos.post_earned_points!).to eq(2)
+        expect(kudos.post_earned_points!).to eq(0)
         expect(balance(emma)).to eq(10)
         expect(emma.points_entries.last).to have_attributes(source: "checkin", note: "Checked in · Sunday Service")
       end
 
       it "only counts check-ins from the earning start date on" do
         check_in(emma, at: 3.weeks.ago)
-        expect(kudos.post_attendance_points!).to eq(0)
+        expect(kudos.post_earned_points!).to eq(0)
       end
 
       it "pays once per person per event per day" do
@@ -40,7 +41,7 @@ RSpec.describe Spirely::Kudos do
         check_in(emma, at: 1.day.ago.change(hour: 11))
         check_in(emma, at: 1.day.ago, pco_event_id: "wednesday", event_name: "Rangers")
 
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         expect(balance(emma)).to eq(20)
       end
 
@@ -49,7 +50,7 @@ RSpec.describe Spirely::Kudos do
         check_in(emma, pco_event_id: "wednesday", event_name: "Rangers")
         check_in(mark, pco_event_id: "staff", event_name: "Staff meeting")
 
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         expect(balance(emma)).to eq(25)
         expect(balance(mark)).to eq(0)
       end
@@ -59,7 +60,7 @@ RSpec.describe Spirely::Kudos do
         check_in(guest, kind: "guest")
         check_in(mark, one_time_guest: true)
 
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         expect(balance(guest)).to eq(10)
         expect(balance(mark)).to eq(0)
       end
@@ -68,20 +69,20 @@ RSpec.describe Spirely::Kudos do
         check_in(emma).destroy!
         expect(balance(emma)).to eq(0) # nothing posted yet, nothing to keep
         attendance = check_in(emma)
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         attendance.delete
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         expect(balance(emma)).to eq(10)
       end
 
       it "posts nothing when the rates are all 0 or Kudos is off" do
         check_in(emma)
         setting.update!(rates: {})
-        expect(kudos.post_attendance_points!).to eq(0)
+        expect(kudos.post_earned_points!).to eq(0)
 
         setting.update!(rates: { "checkin" => 10 })
         church.update!(enabled_modules: ["smallgroups"])
-        expect(kudos.post_attendance_points!).to eq(0)
+        expect(kudos.post_earned_points!).to eq(0)
       end
     end
 
@@ -103,7 +104,7 @@ RSpec.describe Spirely::Kudos do
         attend(event, emma)
         attend(event, mark, attended: false)
 
-        2.times { kudos.post_attendance_points! }
+        2.times { kudos.post_earned_points! }
         expect(balance(emma)).to eq(15)
         expect(balance(mark)).to eq(0)
         expect(emma.points_entries.last).to have_attributes(source: "group_attendance", note: "Attended Rangers")
@@ -112,11 +113,11 @@ RSpec.describe Spirely::Kudos do
       it "doesn't pay twice when the sync replaces the attendance row" do
         event = meeting
         attend(event, emma)
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         event.attendances.delete_all
         attend(event, emma)
 
-        kudos.post_attendance_points!
+        kudos.post_earned_points!
         expect(balance(emma)).to eq(15)
       end
 
@@ -124,7 +125,112 @@ RSpec.describe Spirely::Kudos do
         attend(meeting(canceled: true), emma)
         attend(meeting(at: 3.weeks.ago), emma)
 
-        expect(kudos.post_attendance_points!).to eq(0)
+        expect(kudos.post_earned_points!).to eq(0)
+      end
+    end
+
+    context "time served" do
+      let(:sunday) { 3.days.ago.change(hour: 9) }
+      let(:type)   { church.service_types.create!(pco_service_type_id: "st1", name: "Sunday Services") }
+
+      # A plan with a rehearsal at 7 and services at 9 and 11, an hour each,
+      # all scheduled for the band (t1).
+      def plan(at: sunday, finished: true)
+        type.plans.create!(church: church, pco_plan_id: SecureRandom.hex(4), title: "Faithful", sort_date: at,
+                           ends_at: finished ? 1.hour.ago : 1.day.from_now).tap do |p|
+          [[-2, "rehearsal"], [0, "service"], [2, "service"]].each_with_index do |(offset, kind), i|
+            p.times.create!(church: church, pco_plan_time_id: "pt#{i}", time_type: kind, team_ids: ["t1"],
+                            starts_at: at + offset.hours, ends_at: at + offset.hours + 1.hour)
+          end
+        end
+      end
+
+      def schedule(plan, person, status: "C", team: "t1", declined: [])
+        plan.plan_people.create!(church: church, person: person, pco_plan_person_id: SecureRandom.hex(4),
+                                 status: status, pco_team_id: team, team_name: "Band", position_name: "Guitar",
+                                 declined_time_ids: declined)
+      end
+
+      before { setting.update!(rates: { "service_hour" => 10 }) }
+
+      it "pays confirmed people for the service times they were scheduled for, once" do
+        p = plan
+        schedule(p, emma)
+        schedule(p, mark, status: "U")
+
+        2.times { kudos.post_earned_points! }
+        expect(balance(emma)).to eq(20)
+        expect(balance(mark)).to eq(0)
+        expect(emma.points_entries.sole).to have_attributes(source: "service", source_id: p.id,
+                                                            note: "Served · Sunday Services · Faithful · 2 hours")
+      end
+
+      it "counts rehearsals and other times when the church turns that on" do
+        setting.update!(count_rehearsals: true)
+        schedule(plan, emma)
+
+        kudos.post_earned_points!
+        expect(balance(emma)).to eq(30)
+      end
+
+      it "leaves out times they declined, and rounds the points" do
+        setting.update!(rates: { "service_hour" => 7 })
+        p = plan
+        p.times.find_by!(pco_plan_time_id: "pt2").update!(ends_at: sunday + 2.hours + 30.minutes)
+        schedule(p, emma, declined: ["pt1"])
+
+        kudos.post_earned_points!
+        expect(balance(emma)).to eq(4) # 0.5 hours × 7 = 3.5, rounded
+        expect(emma.points_entries.sole.note).to end_with("0.5 hours")
+      end
+
+      it "counts overlapping hours once for someone on two teams" do
+        p = plan
+        p.times.update_all(team_ids: %w[t1 t2])
+        schedule(p, emma)
+        schedule(p, emma, team: "t2")
+
+        expect(kudos.post_earned_points!).to eq(1)
+        expect(balance(emma)).to eq(20)
+      end
+
+      it "pays the flat rate when their team has no times on the plan" do
+        setting.update!(rates: { "service_hour" => 10, "service_flat" => 25 })
+        schedule(plan, emma, team: "t9")
+
+        kudos.post_earned_points!
+        expect(balance(emma)).to eq(25)
+        expect(emma.points_entries.sole.note).to eq("Served · Sunday Services · Faithful")
+      end
+
+      it "waits until the plan is over, and skips plans before the start date" do
+        schedule(plan(finished: false), emma)
+        schedule(plan(at: 3.weeks.ago), emma)
+
+        expect(kudos.post_earned_points!).to eq(0)
+      end
+
+      it "doesn't pay again after a re-sync replaces the schedule" do
+        p = plan
+        schedule(p, emma)
+        kudos.post_earned_points!
+        p.plan_people.delete_all
+        schedule(p, emma)
+
+        kudos.post_earned_points!
+        expect(balance(emma)).to eq(20)
+      end
+
+      it "saves what was served on the entry, in church time" do
+        schedule(plan, emma)
+        kudos.post_earned_points!
+        setting.update!(count_rehearsals: true)
+
+        serving = emma.points_entries.sole.details["serving"]
+        expect(serving).to include("plan" => "Sunday Services · Faithful", "hours" => 2.0, "flat" => false,
+                                   "roles" => ["Band — Guitar"])
+        clock = ->(t) { t.in_time_zone(Spirely::ChurchTime.zone(church)).strftime("%-l:%M %p") }
+        expect(serving["times"].map { |t| t["clock"] }).to eq([clock.(sunday), clock.(sunday + 2.hours)])
       end
     end
   end

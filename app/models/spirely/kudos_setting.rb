@@ -9,8 +9,11 @@ module Spirely
   #                      that earn a different amount (e.g. Wednesday
   #                      Rangers vs Sunday). 0 there means that event
   #                      doesn't earn at all.
-  # Both default to 0, so turning Kudos on never starts paying out until
-  # an admin picks a rate.
+  #   "service_hour"     points per hour served on a Services plan (5ST-62)
+  #   "service_flat"     points per serving for teams with no plan times
+  # All default to 0, so turning Kudos on never starts paying out until
+  # an admin picks a rate. count_rehearsals adds rehearsal and other plan
+  # times to hours served; off, only service times count.
   class KudosSetting < ApplicationRecord
     MAX_RATE = 10_000
 
@@ -30,6 +33,10 @@ module Spirely
     def checkin_points = rates.fetch("checkin", 0).to_i
     def group_points = rates.fetch("group_attendance", 0).to_i
     def checkin_event_points = rates.fetch("checkin_events", {}).transform_values(&:to_i)
+    def service_hour_points = rates.fetch("service_hour", 0).to_i
+    def service_flat_points = rates.fetch("service_flat", 0).to_i
+
+    def earns_for_serving? = service_hour_points.positive? || service_flat_points.positive?
 
     # Points one check-in at this event earns.
     def points_for_checkin(pco_event_id)
@@ -37,16 +44,18 @@ module Spirely
     end
 
     def earns_anything?
-      checkin_points.positive? || group_points.positive? || checkin_event_points.values.any?(&:positive?)
+      checkin_points.positive? || group_points.positive? || checkin_event_points.values.any?(&:positive?) ||
+        earns_for_serving?
     end
 
     private
 
     def rates_are_points
-      values = [rates["checkin"], rates["group_attendance"], *rates.fetch("checkin_events", {}).values].compact
+      values = [rates["checkin"], rates["group_attendance"], rates["service_hour"], rates["service_flat"],
+                *rates.fetch("checkin_events", {}).values].compact
       return if values.all? { |v| v.is_a?(Integer) && v.between?(0, MAX_RATE) }
 
-      errors.add(:base, "Points per check-in or meeting must be a whole number from 0 to #{MAX_RATE.to_fs(:delimited)}.")
+      errors.add(:base, "Points per check-in, meeting or hour must be a whole number from 0 to #{MAX_RATE.to_fs(:delimited)}.")
     end
   end
 end
