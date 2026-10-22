@@ -66,6 +66,9 @@ class Church < ApplicationRecord
   has_many :points_entries, class_name: "Spirely::PointsEntry", dependent: :destroy
   has_one  :kudos_setting, class_name: "Spirely::KudosSetting", dependent: :destroy
   has_many :promo_codes, class_name: "Spirely::PromoCode", dependent: :destroy
+  has_many :service_types, class_name: "Spirely::ServiceType", dependent: :destroy
+  has_many :service_plans, class_name: "Spirely::ServicePlan"
+  has_many :service_plan_people, class_name: "Spirely::ServicePlanPerson"
   has_one  :church_integration, class_name: "Spirely::ChurchIntegration", dependent: :destroy
   has_one  :sync_setting, class_name: "Spirely::SyncSetting", dependent: :destroy
 

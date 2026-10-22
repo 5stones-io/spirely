@@ -119,13 +119,13 @@ module Spirely
       @church.people.find_by!(pco_person_id: pco_person_id)
     end
 
-    # Posts points for check-ins and group meetings attended since the
-    # earning start date (5ST-61), at the church's rates. Safe to run after
-    # every sync: each check-in and each meeting pays a person at most
-    # once, and a rate of 0 posts nothing. Points already posted stay put
-    # if PCO later drops the record — they may have been spent. Returns
-    # how many entries it posted.
-    def post_attendance_points!
+    # Posts points for check-ins and group meetings attended (5ST-61) and
+    # time served on Services plans (5ST-62) since the earning start date,
+    # at the church's rates. Safe to run after every sync: each check-in,
+    # meeting and plan pays a person at most once, and a rate of 0 posts
+    # nothing. Points already posted stay put if PCO later drops the
+    # record — they may have been spent. Returns how many entries it posted.
+    def post_earned_points!
       return 0 unless @church.module_enabled?("kudos")
 
       setting = self.setting
@@ -133,7 +133,7 @@ module Spirely
 
       zone  = ChurchTime.zone(@church)
       since = setting.earning_starts_on.in_time_zone(zone)
-      rows  = checkin_rows(setting, since, zone) + group_rows(setting, since, zone)
+      rows  = checkin_rows(setting, since, zone) + group_rows(setting, since, zone) + service_rows(setting, since, zone)
       rows.each_slice(500).sum { |slice| PointsEntry.insert_all(slice).length }
     end
 
@@ -221,9 +221,54 @@ module Spirely
       end
     end
 
-    def entry_row(person_id, points, source, source_type, source_id, note, day)
+    # One entry per person per plan, once every time in the plan is over.
+    # Keyed on the plan rather than the position, so someone on two teams
+    # isn't paid twice for the same hours.
+    def service_rows(setting, since, zone)
+      return [] unless setting.earns_for_serving?
+
+      plans = @church.service_plans.current.finished.where(sort_date: since..)
+      rows  = @church.service_plan_people.where(plan: plans, status: "C")
+                     .where.not(PointsEntry.where(source_type: ServicePlan.polymorphic_name)
+                                           .where("spirely_points_entries.source_id = spirely_service_plan_people.plan_id")
+                                           .where("spirely_points_entries.person_id = spirely_service_plan_people.person_id")
+                                           .arel.exists)
+                     .to_a
+      return [] if rows.empty?
+
+      by_id = ServicePlan.where(id: rows.map(&:plan_id)).includes(:service_type, :times).index_by(&:id)
+      rows.group_by { |r| [r.plan_id, r.person_id] }.filter_map do |(plan_id, person_id), positions|
+        plan    = by_id[plan_id]
+        serving = plan.serving_for(positions, count_rehearsals: setting.count_rehearsals)
+        points  = serving.flat ? setting.service_flat_points : (serving.hours * setting.service_hour_points).round
+        next unless points.positive?
+
+        note = ["Served · #{plan.name}", (hours_label(serving.hours) unless serving.flat)].compact.join(" · ")
+        entry_row(person_id, points, "service", ServicePlan.polymorphic_name, plan_id, note,
+                  plan.sort_date.in_time_zone(zone).to_date, details: { serving: serving_details(plan, serving, zone) })
+      end
+    end
+
+    # Saved on the entry, so staff see what was paid for even after the
+    # schedule or the settings change. Times are labeled in church time.
+    def serving_details(plan, serving, zone)
+      {
+        plan: plan.name, dates: plan.dates, hours: serving.hours, flat: serving.flat,
+        roles: serving.plan_people.map(&:role).compact_blank.uniq,
+        times: serving.times.map do |t|
+          { name: t.name, time_type: t.time_type, clock: t.starts_at.in_time_zone(zone).strftime("%-l:%M %p") }
+        end,
+      }
+    end
+
+    def hours_label(hours)
+      n = ActiveSupport::NumberHelper.number_to_rounded(hours, precision: 2, strip_insignificant_zeros: true)
+      "#{n} #{hours == 1 ? "hour" : "hours"}"
+    end
+
+    def entry_row(person_id, points, source, source_type, source_id, note, day, details: nil)
       { church_id: @church.id, person_id: person_id, points: points, source: source, source_type: source_type,
-        source_id: source_id, note: note, occurred_on: day }
+        source_id: source_id, note: note, occurred_on: day, details: details }
     end
 
     def search(scope, first_col, last_col, query, pco_ids, limit)

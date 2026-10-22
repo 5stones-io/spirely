@@ -21,13 +21,13 @@ module Spirely
   # without Groups access). That's recorded on SyncSetting for Settings'
   # reconnect notice rather than raised, since retrying won't help.
   class PcoGroupsSyncJob < ApplicationJob
+    include Spirely::PcoFetching
+
     BASE                = "/groups/v2"
     HISTORY_WINDOW      = 26.weeks
     UPCOMING_WINDOW     = 12.weeks
     ATTENDANCE_MEETINGS = 10
     ATTENDANCE_RECHECK  = 14.days
-    RATE_LIMIT_PAUSE    = 20 # seconds — PCO allows ~100 requests per 20s
-    MAX_RATE_RETRIES    = 3
 
     def perform(church_id)
       church = Church.find(church_id)
@@ -211,46 +211,6 @@ module Spirely
     def primary(entries, key)
       list = Array(entries)
       (list.find { |e| e["primary"] } || list.first)&.dig(key).presence
-    end
-
-    def save_if_changed(record)
-      record.save! if record.new_record? || record.changed?
-      record
-    end
-
-    def index_included(included, type)
-      Array(included).select { |r| r["type"] == type }.index_by { |r| r["id"] }
-    end
-
-    # Follows links.next like PcoClient#paginate, but retries a 429 on the
-    # page that hit it instead of failing the whole sync.
-    def fetch_all(path, params = {}, with_included: false)
-      data, included = [], []
-      query = params.merge("per_page" => Spirely::PcoClient::PAGE_SIZE)
-
-      loop do
-        page = get_with_retry(path, query)
-        data.concat(Array(page["data"]))
-        included.concat(Array(page["included"]))
-
-        next_link = page.dig("links", "next").presence
-        break unless next_link
-
-        uri   = URI.parse(next_link)
-        path  = uri.path
-        query = URI.decode_www_form(uri.query.to_s).to_h
-      end
-
-      with_included ? { data: data, included: included } : data
-    end
-
-    def get_with_retry(path, query, attempt: 0)
-      @client.get(path, query)
-    rescue Spirely::PcoApiError => e
-      raise unless e.status == 429 && attempt < MAX_RATE_RETRIES
-
-      sleep RATE_LIMIT_PAUSE
-      get_with_retry(path, query, attempt: attempt + 1)
     end
   end
 end

@@ -48,6 +48,12 @@ module Spirely
                 Spirely::PcoGroupsSyncJob.perform_later(Current.church.id)
                 enqueued << "groups"
               end
+
+              # Read-only Services mirror for Kudos time served (5ST-62).
+              if Current.church.module_enabled?("kudos")
+                Spirely::PcoServicesSyncJob.perform_later(Current.church.id)
+                enqueued << "services"
+              end
             end
           end
 

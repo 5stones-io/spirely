@@ -38,4 +38,12 @@ RSpec.describe "POST /api/v1/sync/trigger", type: :request do
     expect(trigger(church)).not_to include("groups")
     expect(Spirely::PcoGroupsSyncJob).not_to have_been_enqueued
   end
+
+  it "queues the Services sync only when Kudos is on" do
+    church = create(:church, enabled_modules: ["kudos"])
+    expect { expect(trigger(church)).to include("services") }
+      .to have_enqueued_job(Spirely::PcoServicesSyncJob).with(church.id)
+
+    expect(trigger(create(:church, enabled_modules: ["kidsmin"]))).not_to include("services")
+  end
 end

@@ -88,7 +88,8 @@ module Spirely
           end
 
           # PATCH /api/v1/admin/kudos/settings
-          #   { earning_starts_on, checkin_points, group_points, event_rates: [{ pco_event_id, points }] }
+          #   { earning_starts_on, checkin_points, group_points, event_rates: [{ pco_event_id, points }],
+          #     service_hour_points, service_flat_points, count_rehearsals }
           # Any subset. event_rates replaces every per-event rate. Points for
           # attendance not yet paid follow straight away at the new rates.
           def update_settings
@@ -97,6 +98,11 @@ module Spirely
             rates = setting.rates.dup
             rates["checkin"] = rate_param(:checkin_points) if params.key?(:checkin_points)
             rates["group_attendance"] = rate_param(:group_points) if params.key?(:group_points)
+            rates["service_hour"] = rate_param(:service_hour_points) if params.key?(:service_hour_points)
+            rates["service_flat"] = rate_param(:service_flat_points) if params.key?(:service_flat_points)
+            if params.key?(:count_rehearsals)
+              setting.count_rehearsals = ActiveModel::Type::Boolean.new.cast(params[:count_rehearsals])
+            end
             if params.key?(:event_rates)
               rates["checkin_events"] = Array(params[:event_rates]).to_h do |r|
                 [r.require(:pco_event_id).to_s, rate_value(r[:points])]
@@ -154,6 +160,11 @@ module Spirely
                 { pco_event_id: id, event_name: names.dig(id, :event_name) || "Event no longer in Check-Ins", points: points }
               end,
               events: names.values,
+              service_hour_points: setting.service_hour_points,
+              service_flat_points: setting.service_flat_points,
+              count_rehearsals: setting.count_rehearsals,
+              services_last_synced_at: Current.church.sync_setting&.services_last_synced_at,
+              services_access_denied_at: Current.church.sync_setting&.services_access_denied_at,
             }
           end
 

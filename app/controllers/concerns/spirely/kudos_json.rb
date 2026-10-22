@@ -14,6 +14,8 @@ module Spirely
       }
       json[:balance_after] = entry.balance_after.to_i if entry.has_attribute?(:balance_after)
       json[:person] = { pco_person_id: entry.person.pco_person_id, name: entry.person.full_name } if with_person
+      # The plan, roles and times behind time served (5ST-62).
+      json[:serving] = entry.details["serving"] if entry.details&.key?("serving")
       json
     end
   end

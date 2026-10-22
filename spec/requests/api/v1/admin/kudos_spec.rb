@@ -98,6 +98,36 @@ RSpec.describe "/api/v1/admin/kudos", type: :request do
     expect(Spirely::Kudos.new(church).totals(emma)[:balance]).to eq(20)
   end
 
+  it "sets the time-served rates and whether rehearsals count" do
+    patch "/api/v1/admin/kudos/settings",
+          params: { service_hour_points: 10, service_flat_points: 25, count_rehearsals: true },
+          headers: auth_headers(admin), as: :json
+
+    expect(response).to have_http_status(:ok)
+    expect(json).to include("service_hour_points" => 10, "service_flat_points" => 25, "count_rehearsals" => true,
+                            "services_last_synced_at" => nil, "services_access_denied_at" => nil)
+  end
+
+  it "shows the plan behind time-served points in someone's history" do
+    sunday = 3.days.ago.change(hour: 9)
+    type = church.service_types.create!(pco_service_type_id: "st1", name: "Sunday Services")
+    plan = type.plans.create!(church: church, pco_plan_id: "pl1", title: "Faithful", dates: "October 19, 2026",
+                              sort_date: sunday, ends_at: sunday + 1.hour)
+    plan.times.create!(church: church, pco_plan_time_id: "pt1", name: "9am", time_type: "service", team_ids: ["t1"],
+                       starts_at: sunday, ends_at: sunday + 90.minutes)
+    plan.plan_people.create!(church: church, person: sarah, pco_plan_person_id: "pp1", status: "C", pco_team_id: "t1",
+                             team_name: "Band", position_name: "Guitar")
+    Spirely::KudosSetting.for(church).update!(earning_starts_on: 1.week.ago.to_date, rates: { "service_hour" => 10 })
+    Spirely::Kudos.new(church).post_earned_points!
+
+    get "/api/v1/admin/kudos/people/p1", headers: auth_headers(admin)
+    entry = json["history"].sole
+    expect(entry).to include("points" => 15, "source" => "service", "note" => "Served · Sunday Services · Faithful · 1.5 hours")
+    expect(entry["serving"]).to include("plan" => "Sunday Services · Faithful", "dates" => "October 19, 2026",
+                                        "hours" => 1.5, "flat" => false, "roles" => ["Band — Guitar"])
+    expect(entry["serving"]["times"].sole).to include("name" => "9am", "time_type" => "service", "clock" => be_present)
+  end
+
   it "rejects a rate that isn't a whole number from 0 up" do
     patch "/api/v1/admin/kudos/settings", params: { checkin_points: -5 }, headers: auth_headers(admin), as: :json
     expect(response).to have_http_status(:unprocessable_entity)
