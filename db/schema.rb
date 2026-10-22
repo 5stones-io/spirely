@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_22_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_22_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -509,6 +509,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000002) do
     t.string "declined_time_ids", default: [], null: false, array: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "time_ids", array: true
     t.index ["church_id", "person_id"], name: "index_spirely_service_plan_people_on_church_id_and_person_id"
     t.index ["church_id"], name: "index_spirely_service_plan_people_on_church_id"
     t.index ["person_id"], name: "index_spirely_service_plan_people_on_person_id"

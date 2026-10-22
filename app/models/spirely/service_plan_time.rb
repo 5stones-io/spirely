@@ -1,7 +1,7 @@
 module Spirely
   # A time in a Services plan: a service, a rehearsal, or something else.
-  # team_ids is which teams PCO scheduled for it; nil means PCO didn't
-  # say, and every team is treated as scheduled.
+  # team_ids is the teams PCO assigned to it (its `assigned_teams`); nil
+  # means PCO didn't say.
   class ServicePlanTime < ApplicationRecord
     TYPES = %w[service rehearsal other].freeze
 

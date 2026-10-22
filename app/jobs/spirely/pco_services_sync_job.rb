@@ -9,9 +9,11 @@ module Spirely
   # apiece, so they're only re-read while the plan is recent
   # (DETAIL_RECHECK) — schedulers often fix who served a few days late.
   #
-  # Which times someone served comes from two things PCO gives per plan:
-  # the teams scheduled for each plan time (scheduled_team_ids), and the
-  # times each person declined. See ServicePlan#serving_for.
+  # Which times someone served comes from each scheduled person's own
+  # `times` relationship, less any they declined; each plan time's
+  # `assigned_teams` is the fallback. See ServicePlan#serving_for. (Don't
+  # pass `fields[PlanTime]` here: PCO treats it as "only these fields" and
+  # drops the relationships.)
   #
   # A 403 means this church's PCO connection can't read Services (a PAT
   # user without Services access). That's recorded on SyncSetting for
@@ -22,7 +24,6 @@ module Spirely
     BASE           = "/services/v2"
     HISTORY_WINDOW = 26.weeks
     DETAIL_RECHECK = 14.days
-    TIME_FIELDS    = "name,time_type,starts_at,ends_at,scheduled_team_ids"
 
     def perform(church_id)
       church = Church.find(church_id)
@@ -101,15 +102,16 @@ module Spirely
 
     # Returns when the plan's last time ends.
     def sync_times(plan, path)
-      seen = fetch_all("#{path}/plan_times", { "fields[PlanTime]" => TIME_FIELDS }).filter_map do |pco|
+      seen = fetch_all("#{path}/plan_times").filter_map do |pco|
         attrs = pco["attributes"]
+        teams = pco.dig("relationships", "assigned_teams")
         next unless attrs["starts_at"] && attrs["ends_at"]
 
         time = plan.times.find_or_initialize_by(pco_plan_time_id: pco["id"])
         time.assign_attributes(
           church: @church, name: attrs["name"], starts_at: attrs["starts_at"], ends_at: attrs["ends_at"],
           time_type: ServicePlanTime::TYPES.include?(attrs["time_type"]) ? attrs["time_type"] : "other",
-          team_ids: attrs.key?("scheduled_team_ids") ? Array(attrs["scheduled_team_ids"]).map(&:to_s) : nil,
+          team_ids: teams && Array(teams["data"]).map { |d| d["id"].to_s },
         )
         save_if_changed(time)
         time
@@ -132,11 +134,13 @@ module Spirely
 
         person  = upsert_person(person_id, people[person_id], attrs["name"])
         team_id = rels.dig("team", "data", "id")
+        times   = rels["times"]
         row = plan.plan_people.find_or_initialize_by(pco_plan_person_id: pco["id"])
         row.assign_attributes(
           church: @church, person: person, status: status, pco_team_id: team_id,
           team_name: teams[team_id]&.dig("attributes", "name"), position_name: attrs["team_position_name"],
           declined_time_ids: Array(rels.dig("declined_plan_times", "data")).map { |d| d["id"].to_s },
+          time_ids: times && Array(times["data"]).map { |d| d["id"].to_s },
         )
         save_if_changed(row)
         row.id
