@@ -7,10 +7,10 @@ module Spirely
   #
   # PCO Groups has no org-wide memberships/attendance endpoints, so this is
   # one request per group for memberships and events, plus one per meeting
-  # for attendance. To keep that bounded, attendance is only fetched for
-  # each group's last ATTENDANCE_MEETINGS past meetings, and only re-fetched
-  # once synced if the meeting is within ATTENDANCE_RECHECK (leaders often
-  # submit or fix attendance a few days late).
+  # for attendance. Attendance is read once for every past meeting in the
+  # history window (so the first sync catches up on 26 weeks, for Kudos),
+  # then only re-read while the meeting is within ATTENDANCE_RECHECK
+  # (leaders often submit or fix attendance a few days late).
   #
   # Nothing removed in PCO is hard-deleted except join requests: groups
   # and meetings get removed_at, memberships get left_at, so group health
@@ -26,7 +26,6 @@ module Spirely
     BASE                = "/groups/v2"
     HISTORY_WINDOW      = 26.weeks
     UPCOMING_WINDOW     = 12.weeks
-    ATTENDANCE_MEETINGS = 10
     ATTENDANCE_RECHECK  = 14.days
 
     def perform(church_id)
@@ -143,9 +142,10 @@ module Spirely
     end
 
     def sync_attendance(group)
-      recent = group.events.held.past.order(starts_at: :desc).limit(ATTENDANCE_MEETINGS)
-      recent.each do |event|
-        next if event.attendance_synced_at && event.starts_at < ATTENDANCE_RECHECK.ago
+      due = group.events.held.past.where(starts_at: HISTORY_WINDOW.ago..)
+                 .where("attendance_synced_at IS NULL OR starts_at >= ?", ATTENDANCE_RECHECK.ago)
+                 .order(starts_at: :desc)
+      due.each do |event|
 
         response = fetch_all("#{BASE}/events/#{event.pco_event_id}/attendances", { "include" => "person" },
                              with_included: true)

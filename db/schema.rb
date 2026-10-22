@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_22_000005) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_22_000006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -692,6 +692,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000005) do
     t.datetime "groups_access_denied_at"
     t.datetime "services_last_synced_at"
     t.datetime "services_access_denied_at"
+    t.datetime "checkins_history_synced_at"
     t.index ["church_id"], name: "index_spirely_sync_settings_on_church_id", unique: true
   end
 

@@ -162,10 +162,11 @@ module Spirely
       end
     end
 
-    # Check-Ins events seen in the last 16 weeks (the attendance sync's
-    # window), most-attended first — what per-event rates are picked from.
+    # Check-Ins events seen in the last 26 weeks (as far back as the
+    # attendance sync reads), most-attended first — what per-event rates are
+    # picked from.
     def checkin_events
-      @church.attendances.where(checked_in_at: PcoAttendanceSyncJob::SYNC_WINDOW.ago..)
+      @church.attendances.where(checked_in_at: PcoAttendanceSyncJob::HISTORY_WINDOW.ago..)
              .group(:pco_event_id).order(Arel.sql("COUNT(*) DESC"))
              .pluck(:pco_event_id, Arel.sql("MAX(event_name)"), Arel.sql("COUNT(*)"))
              .map { |id, name, count| { pco_event_id: id, event_name: name, check_ins: count } }

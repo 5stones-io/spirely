@@ -172,4 +172,19 @@ RSpec.describe Spirely::PcoGroupsSyncJob do
 
     expect(a_request(:get, /groups\/v2/)).not_to have_been_made
   end
+
+  it "reads attendance for every unread meeting in the last 26 weeks, but re-reads only recent ones" do
+    old = 20.weeks.ago
+    stub_full_sync(events: [event("e1", 1.week.ago), event("e-old", old), event("e-read", 5.weeks.ago)])
+    stub_pco("/events/e-old/attendances", { "data" => [], "included" => [] })
+    stub_pco("/events/e-read/attendances", { "data" => [], "included" => [] })
+    described_class.perform_now(church.id)
+    expect(church.group_events.find_by!(pco_event_id: "e-old").attendance_synced_at).to be_present
+    expect(a_request(:get, "#{PCO}/events/e-read/attendances").with(query: hash_including({}))).to have_been_made.once
+
+    described_class.perform_now(church.id)
+    expect(a_request(:get, "#{PCO}/events/e-old/attendances").with(query: hash_including({}))).to have_been_made.once
+    expect(a_request(:get, "#{PCO}/events/e-read/attendances").with(query: hash_including({}))).to have_been_made.once
+    expect(a_request(:get, "#{PCO}/events/e1/attendances").with(query: hash_including({}))).to have_been_made.twice
+  end
 end
