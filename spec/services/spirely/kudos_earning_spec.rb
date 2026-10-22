@@ -145,10 +145,10 @@ RSpec.describe Spirely::Kudos do
         end
       end
 
-      def schedule(plan, person, status: "C", team: "t1", declined: [])
+      def schedule(plan, person, status: "C", team: "t1", declined: [], times: nil)
         plan.plan_people.create!(church: church, person: person, pco_plan_person_id: SecureRandom.hex(4),
                                  status: status, pco_team_id: team, team_name: "Band", position_name: "Guitar",
-                                 declined_time_ids: declined)
+                                 declined_time_ids: declined, time_ids: times)
       end
 
       before { setting.update!(rates: { "service_hour" => 10 }) }
@@ -163,6 +163,21 @@ RSpec.describe Spirely::Kudos do
         expect(balance(mark)).to eq(0)
         expect(emma.points_entries.sole).to have_attributes(source: "service", source_id: p.id,
                                                             note: "Served · Sunday Services · Faithful · 2 hours")
+      end
+
+      it "uses the times PCO lists for the person over their team's times" do
+        schedule(plan, emma, times: ["pt1"]) # only the 9:00, though the band plays both
+
+        kudos.post_earned_points!
+        expect(balance(emma)).to eq(10)
+      end
+
+      it "pays the flat rate when PCO lists no times for the person" do
+        setting.update!(rates: { "service_hour" => 10, "service_flat" => 25 })
+        schedule(plan, emma, times: [])
+
+        kudos.post_earned_points!
+        expect(balance(emma)).to eq(25)
       end
 
       it "counts rehearsals and other times when the church turns that on" do

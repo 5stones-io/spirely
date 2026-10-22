@@ -24,21 +24,26 @@ RSpec.describe Spirely::PcoServicesSyncJob do
                         "sort_date" => sort_date.iso8601 } }
   end
 
+  # Shaped like PCO's real responses: a plan time lists its assigned
+  # teams, and a plan person lists their own times.
   def plan_time(id, starts_at, type: "service", teams: ["t1"])
-    attrs = { "name" => type.capitalize, "time_type" => type, "starts_at" => starts_at.iso8601,
-              "ends_at" => (starts_at + 1.hour).iso8601 }
-    attrs["scheduled_team_ids"] = teams unless teams == :missing
-    { "type" => "PlanTime", "id" => id, "attributes" => attrs }
+    rels = teams == :missing ? {} : { "assigned_teams" => { "data" => teams.map { |t| { "type" => "Team", "id" => t } } } }
+    { "type" => "PlanTime", "id" => id,
+      "attributes" => { "name" => type.capitalize, "time_type" => type, "starts_at" => starts_at.iso8601,
+                        "ends_at" => (starts_at + 1.hour).iso8601 },
+      "relationships" => rels }
   end
 
-  def member(id, person_id, status, team: "t1", position: "Guitar", declined: [])
+  def member(id, person_id, status, team: "t1", position: "Guitar", declined: [], times: %w[pt1 pt2 pt3])
+    rels = {
+      "person" => { "data" => { "type" => "Person", "id" => person_id } },
+      "team" => { "data" => { "type" => "Team", "id" => team } },
+      "declined_plan_times" => { "data" => declined.map { |t| { "type" => "PlanTime", "id" => t } } },
+    }
+    rels["times"] = { "data" => times.map { |t| { "type" => "PlanTime", "id" => t } } } unless times == :missing
     { "type" => "PlanPerson", "id" => id,
       "attributes" => { "name" => "Lee Smith", "status" => status, "team_position_name" => position },
-      "relationships" => {
-        "person" => { "data" => { "type" => "Person", "id" => person_id } },
-        "team" => { "data" => { "type" => "Team", "id" => team } },
-        "declined_plan_times" => { "data" => declined.map { |t| { "type" => "PlanTime", "id" => t } } },
-      } }
+      "relationships" => rels }
   end
 
   def stub_full_sync(members: nil, times: nil)
@@ -48,7 +53,8 @@ RSpec.describe Spirely::PcoServicesSyncJob do
       plan_time("pt1", sunday - 2.hours, type: "rehearsal"), plan_time("pt2", sunday), plan_time("pt3", sunday + 2.hours),
     ] })
     stub_pco("#{PLAN_PATH}/team_members", {
-      "data" => members || [member("pp1", "p1", "C", declined: ["pt3"]), member("pp2", "p2", "U", team: "t2", position: nil)],
+      "data" => members || [member("pp1", "p1", "C", declined: ["pt3"]),
+                            member("pp2", "p2", "U", team: "t2", position: nil, times: ["pt2"])],
       "included" => [
         { "type" => "Person", "id" => "p1", "attributes" => { "first_name" => "Lee", "last_name" => "Smith" } },
         { "type" => "Team", "id" => "t1", "attributes" => { "name" => "Band" } },
@@ -72,10 +78,12 @@ RSpec.describe Spirely::PcoServicesSyncJob do
     lee = church.people.find_by!(pco_person_id: "p1")
     expect(lee).to have_attributes(first_name: "Lee", last_name: "Smith")
     expect(plan.plan_people.find_by!(pco_plan_person_id: "pp1"))
-      .to have_attributes(person: lee, status: "C", team_name: "Band", position_name: "Guitar", declined_time_ids: ["pt3"])
+      .to have_attributes(person: lee, status: "C", team_name: "Band", position_name: "Guitar", declined_time_ids: ["pt3"],
+                          time_ids: %w[pt1 pt2 pt3])
     # A person PCO didn't include falls back to the name on the plan person.
     expect(plan.plan_people.find_by!(pco_plan_person_id: "pp2"))
-      .to have_attributes(status: "U", team_name: "Production", person: have_attributes(first_name: "Lee", pco_person_id: "p2"))
+      .to have_attributes(status: "U", team_name: "Production", time_ids: ["pt2"],
+                          person: have_attributes(first_name: "Lee", pco_person_id: "p2"))
     expect(church.sync_setting.services_last_synced_at).to be_present
   end
 
@@ -91,11 +99,21 @@ RSpec.describe Spirely::PcoServicesSyncJob do
     expect(plan.plan_people.sole).to have_attributes(pco_plan_person_id: "pp1", status: "C", position_name: "Bass")
   end
 
-  it "treats a time with no scheduled_team_ids as open to every team" do
-    stub_full_sync(times: [plan_time("pt2", sunday, teams: :missing)])
+  it "keeps nil when PCO doesn't list a time's teams or a person's times" do
+    stub_full_sync(times: [plan_time("pt2", sunday, teams: :missing)], members: [member("pp1", "p1", "C", times: :missing)])
     described_class.perform_now(church.id)
 
-    expect(church.service_plans.sole.times.sole.team_ids).to be_nil
+    plan = church.service_plans.sole
+    expect(plan.times.sole.team_ids).to be_nil
+    expect(plan.plan_people.sole.time_ids).to be_nil
+  end
+
+  # PCO reads `fields[PlanTime]` as "only these fields", which drops the
+  # assigned_teams relationship.
+  it "asks for plan times without a fields filter" do
+    stub_full_sync
+    described_class.perform_now(church.id)
+    expect(a_request(:get, %r{/plan_times}).with(query: hash_including("fields[PlanTime]" => anything))).not_to have_been_made
   end
 
   it "stops paging once plans are older than the window" do

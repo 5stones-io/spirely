@@ -1,6 +1,7 @@
 module Spirely
   # One position someone was scheduled for on a Services plan, and whether
-  # they confirmed it. Someone on two teams has two rows.
+  # they confirmed it. Someone on two teams has two rows. time_ids is the
+  # plan times PCO lists for this position (nil if it didn't say).
   class ServicePlanPerson < ApplicationRecord
     STATUSES = { "C" => "confirmed", "U" => "unconfirmed", "D" => "declined" }.freeze
 
@@ -19,8 +20,13 @@ module Spirely
 
     def confirmed? = status == "C"
 
+    # Their own times when PCO gave them; otherwise the times their team
+    # is assigned to, and every time if PCO said neither.
     def scheduled_for?(time)
-      (time.team_ids.nil? || time.team_ids.include?(pco_team_id)) && !declined_time_ids.include?(time.pco_plan_time_id)
+      return false if declined_time_ids.include?(time.pco_plan_time_id)
+      return time_ids.include?(time.pco_plan_time_id) unless time_ids.nil?
+
+      time.team_ids.nil? || time.team_ids.include?(pco_team_id)
     end
 
     # "Band — Guitar", or just the team.
