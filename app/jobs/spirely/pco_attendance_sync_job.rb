@@ -6,21 +6,30 @@ module Spirely
   # scale attendance volume (hundreds, not millions, per the Attendance
   # Nudge spec) makes this cheap, and find_or_create_by! on pco_check_in_id
   # makes re-running safe.
+  #
+  # The first sync for a church reaches back HISTORY_WINDOW instead, once,
+  # so Kudos can pay for check-ins that far back; SyncSetting
+  # #checkins_history_synced_at records that it's been done.
   class PcoAttendanceSyncJob < ApplicationJob
     # Covers the 8-12 week baseline window the nudge computation needs
     # (spec Section 3.1) with headroom.
     SYNC_WINDOW = 16.weeks
+    # How far back the first sync reads — the same 26 weeks the Groups and
+    # Services mirrors keep.
+    HISTORY_WINDOW = 26.weeks
 
     def perform(church_id)
       church = Church.find(church_id)
       return unless church.church_integration&.pco_connected?
 
       client = Spirely::PcoClient.new(church.church_integration)
+      settings = church.sync_setting || church.create_sync_setting!
+      first_sync = settings.checkins_history_synced_at.nil?
 
       response = client.paginate(
         "/check-ins/v2/check_ins",
         include: "person,event_period,check_in_times",
-        "where[created_at][gte]": SYNC_WINDOW.ago.iso8601
+        "where[created_at][gte]": (first_sync ? HISTORY_WINDOW : SYNC_WINDOW).ago.iso8601
       )
 
       check_ins = response["data"]
@@ -33,6 +42,7 @@ module Spirely
       locations       = sync_locations(church, client)
 
       check_ins.each { |ci| sync_check_in(church, ci, people, event_periods, events, check_in_times, locations) }
+      settings.update!(checkins_history_synced_at: Time.current) if first_sync
 
       Rails.logger.info("[Spirely] PcoAttendanceSyncJob complete for church #{church_id} — #{check_ins.size} check-ins")
       # Fresh check-ins in hand — post their Kudos points (5ST-61).
