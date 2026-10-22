@@ -55,6 +55,11 @@ Spirely::Engine.routes.draw do
       get    "my_points",                                to: "my_points#show"
       post   "my_points/claim",                          to: "my_points#claim"
       get    "my_points/store",                          to: "my_points#store"
+      patch  "my_points/leaderboard",                    to: "my_points#leaderboard"
+      get    "recognition",                              to: "recognition#show"
+      get    "recognition/recipients",                   to: "recognition#recipients"
+      get    "recognition/leaderboard",                  to: "recognition#leaderboard"
+      post   "shout_outs",                               to: "recognition#create"
       post   "my_points/redeem",                         to: "my_points#redeem"
 
       get    "schedule_responses/:token",                to: "schedule_responses#show"
@@ -119,6 +124,9 @@ Spirely::Engine.routes.draw do
         post  "kudos/store/orders/:id/fulfill",    to: "kudos_store#fulfill"
         post  "kudos/store/orders/:id/cancel",     to: "kudos_store#cancel"
         post  "kudos/store/checkout",              to: "kudos_store#checkout"
+        get   "kudos/shout_outs",                  to: "kudos#shout_outs"
+        patch "kudos/shout_outs/:id",              to: "kudos#update_shout_out"
+        post  "kudos/shout_outs/:id/points",       to: "kudos#shout_out_points"
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member

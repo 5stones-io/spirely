@@ -38,6 +38,7 @@ module Spirely
       sync_service_types
       church.service_types.current.find_each { |type| sync_plans(type) }
       plans_needing_details.find_each { |plan| sync_plan_details(plan) }
+      sync_team_leaders # after the rosters, which bring in the people
 
       settings.update!(services_last_synced_at: Time.current, services_access_denied_at: nil)
       Spirely::KudosEarningJob.perform_later(church.id)
@@ -61,6 +62,29 @@ module Spirely
         pco["id"]
       end
       @church.service_types.current.where.not(pco_service_type_id: seen).update_all(removed_at: Time.current)
+    end
+
+    # Team leaders across every service type, for the Kudos shout-out
+    # allowance (5ST-64). Only people Spirely already knows are kept — a
+    # leader who has never served or synced as a Person has no allowance
+    # to give yet.
+    def sync_team_leaders
+      seen = @church.service_types.current.flat_map do |type|
+        response = fetch_all("#{BASE}/service_types/#{type.pco_service_type_id}/teams", { "include" => "team_leaders" },
+                             with_included: true)
+        teams = response[:data].index_by { |t| t["id"] }
+        index_included(response[:included], "TeamLeader").values.filter_map do |leader|
+          team_id = leader.dig("relationships", "team", "data", "id")
+          person  = @church.people.find_by(pco_person_id: leader.dig("relationships", "person", "data", "id"))
+          next unless team_id && person
+
+          row = @church.service_team_leaders.find_or_initialize_by(pco_team_id: team_id, person: person)
+          row.team_name = teams[team_id]&.dig("attributes", "name")
+          save_if_changed(row)
+          row.id
+        end
+      end
+      @church.service_team_leaders.where.not(id: seen).delete_all
     end
 
     # Newest first, stopping once a page reaches past the window.

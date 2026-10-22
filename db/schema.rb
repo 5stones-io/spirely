@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_22_000005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -427,6 +427,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.boolean "count_rehearsals", default: false, null: false
+    t.boolean "leaderboards_enabled", default: false, null: false
     t.index ["church_id"], name: "index_spirely_kudos_settings_on_church_id", unique: true
   end
 
@@ -455,6 +456,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
     t.datetime "updated_at", null: false
     t.datetime "last_checked_in_at"
     t.integer "check_in_count"
+    t.boolean "kudos_leaderboard_opt_out", default: false, null: false
     t.index ["church_id", "pco_person_id"], name: "index_spirely_people_on_church_id_and_pco_person_id", unique: true
   end
 
@@ -552,6 +554,18 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
     t.index ["service_type_id"], name: "index_spirely_service_plans_on_service_type_id"
   end
 
+  create_table "spirely_service_team_leaders", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "person_id", null: false
+    t.string "pco_team_id", null: false
+    t.string "team_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "pco_team_id", "person_id"], name: "index_spirely_service_team_leaders_unique", unique: true
+    t.index ["church_id"], name: "index_spirely_service_team_leaders_on_church_id"
+    t.index ["person_id"], name: "index_spirely_service_team_leaders_on_person_id"
+  end
+
   create_table "spirely_service_types", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.string "pco_service_type_id", null: false
@@ -561,6 +575,30 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
     t.datetime "updated_at", null: false
     t.index ["church_id", "pco_service_type_id"], name: "idx_on_church_id_pco_service_type_id_36903e8659", unique: true
     t.index ["church_id"], name: "index_spirely_service_types_on_church_id"
+  end
+
+  create_table "spirely_shout_outs", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "from_account_id"
+    t.bigint "from_person_id"
+    t.string "from_name", null: false
+    t.bigint "to_person_id", null: false
+    t.text "message", null: false
+    t.string "visibility", default: "public", null: false
+    t.integer "points", default: 0, null: false
+    t.string "points_from"
+    t.bigint "points_entry_id"
+    t.datetime "hidden_at"
+    t.string "hidden_by_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "created_at"], name: "index_spirely_shout_outs_on_church_id_and_created_at"
+    t.index ["church_id"], name: "index_spirely_shout_outs_on_church_id"
+    t.index ["from_account_id", "created_at"], name: "index_spirely_shout_outs_on_from_account_id_and_created_at"
+    t.index ["from_account_id"], name: "index_spirely_shout_outs_on_from_account_id"
+    t.index ["from_person_id"], name: "index_spirely_shout_outs_on_from_person_id"
+    t.index ["points_entry_id"], name: "index_spirely_shout_outs_on_points_entry_id"
+    t.index ["to_person_id"], name: "index_spirely_shout_outs_on_to_person_id"
   end
 
   create_table "spirely_staff_invitations", force: :cascade do |t|
@@ -750,7 +788,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000004) do
   add_foreign_key "spirely_service_plan_times", "spirely_service_plans", column: "plan_id", on_delete: :cascade
   add_foreign_key "spirely_service_plans", "churches"
   add_foreign_key "spirely_service_plans", "spirely_service_types", column: "service_type_id"
+  add_foreign_key "spirely_service_team_leaders", "churches"
+  add_foreign_key "spirely_service_team_leaders", "spirely_people", column: "person_id", on_delete: :cascade
   add_foreign_key "spirely_service_types", "churches"
+  add_foreign_key "spirely_shout_outs", "accounts", column: "from_account_id", on_delete: :nullify
+  add_foreign_key "spirely_shout_outs", "churches"
+  add_foreign_key "spirely_shout_outs", "spirely_people", column: "from_person_id", on_delete: :nullify
+  add_foreign_key "spirely_shout_outs", "spirely_people", column: "to_person_id"
+  add_foreign_key "spirely_shout_outs", "spirely_points_entries", column: "points_entry_id", on_delete: :nullify
   add_foreign_key "spirely_staff_invitations", "churches"
   add_foreign_key "spirely_store_codes", "churches"
   add_foreign_key "spirely_store_codes", "spirely_store_items", column: "item_id", on_delete: :cascade

@@ -77,7 +77,8 @@ module Spirely
           # points is signed: negative deducts.
           def create_entry
             entry = kudos.award!(pco_person_id: params.require(:pco_person_id), points: params.require(:points),
-                                 note: params[:note], by_account: Current.account)
+                                 note: params[:note], by_account: Current.account,
+                                 share: ActiveModel::Type::Boolean.new.cast(params[:share]))
             render json: points_entry_json(entry, with_person: true).merge(balance: kudos.totals(entry.person)[:balance]),
                    status: :created
           end
@@ -103,6 +104,10 @@ module Spirely
             if params.key?(:count_rehearsals)
               setting.count_rehearsals = ActiveModel::Type::Boolean.new.cast(params[:count_rehearsals])
             end
+            rates["leader_allowance"] = rate_param(:leader_allowance) if params.key?(:leader_allowance)
+            if params.key?(:leaderboards_enabled)
+              setting.leaderboards_enabled = ActiveModel::Type::Boolean.new.cast(params[:leaderboards_enabled])
+            end
             if params.key?(:event_rates)
               rates["checkin_events"] = Array(params[:event_rates]).to_h do |r|
                 [r.require(:pco_event_id).to_s, rate_value(r[:points])]
@@ -111,6 +116,29 @@ module Spirely
             setting.update!(rates: rates)
             Spirely::KudosEarningJob.perform_later(Current.church.id)
             render json: settings_json
+          end
+
+          # GET /api/v1/admin/kudos/shout_outs?show=all|hidden&page=
+          # Every shout-out, private and kids' ones included (5ST-64).
+          def shout_outs
+            scope = Current.church.shout_outs.newest_first.includes(:to_person)
+            scope = scope.where.not(hidden_at: nil) if params[:show] == "hidden"
+            page = scope.page(params[:page]).per(PER_PAGE)
+            render json: { shout_outs: page.map { |s| shout_out_json(s, staff: true) }, more: page.next_page.present? }
+          end
+
+          # PATCH /api/v1/admin/kudos/shout_outs/:id  { hidden }
+          def update_shout_out
+            shout = Current.church.shout_outs.find(params[:id])
+            recognition.hide!(shout, hidden: ActiveModel::Type::Boolean.new.cast(params.require(:hidden)), by_account: Current.account)
+            render json: shout_out_json(shout, staff: true)
+          end
+
+          # POST /api/v1/admin/kudos/shout_outs/:id/points  { points }
+          def shout_out_points
+            shout = Current.church.shout_outs.find(params[:id])
+            recognition.add_points!(shout, points: params.require(:points), by_account: Current.account)
+            render json: shout_out_json(shout, staff: true)
           end
 
           # GET /api/v1/admin/kudos/promo_codes
@@ -148,6 +176,8 @@ module Spirely
 
           private
 
+          def recognition = @recognition ||= Spirely::Recognition.new(Current.church)
+
           def settings_json
             setting = kudos.setting
             names = kudos.checkin_events.index_by { |e| e[:pco_event_id] }
@@ -163,6 +193,8 @@ module Spirely
               service_hour_points: setting.service_hour_points,
               service_flat_points: setting.service_flat_points,
               count_rehearsals: setting.count_rehearsals,
+              leader_allowance: setting.leader_allowance,
+              leaderboards_enabled: setting.leaderboards_enabled,
               services_last_synced_at: Current.church.sync_setting&.services_last_synced_at,
               services_access_denied_at: Current.church.sync_setting&.services_access_denied_at,
             }

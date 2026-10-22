@@ -11,6 +11,8 @@ module Spirely
   #                      doesn't earn at all.
   #   "service_hour"     points per hour served on a Services plan (5ST-62)
   #   "service_flat"     points per serving for teams with no plan times
+  #   "leader_allowance" points a month each leader can give with
+  #                      shout-outs (5ST-64)
   # All default to 0, so turning Kudos on never starts paying out until
   # an admin picks a rate. count_rehearsals adds rehearsal and other plan
   # times to hours served; off, only service times count.
@@ -35,6 +37,7 @@ module Spirely
     def checkin_event_points = rates.fetch("checkin_events", {}).transform_values(&:to_i)
     def service_hour_points = rates.fetch("service_hour", 0).to_i
     def service_flat_points = rates.fetch("service_flat", 0).to_i
+    def leader_allowance = rates.fetch("leader_allowance", 0).to_i
 
     def earns_for_serving? = service_hour_points.positive? || service_flat_points.positive?
 
@@ -51,7 +54,7 @@ module Spirely
     private
 
     def rates_are_points
-      values = [rates["checkin"], rates["group_attendance"], rates["service_hour"], rates["service_flat"],
+      values = [rates["checkin"], rates["group_attendance"], rates["service_hour"], rates["service_flat"], rates["leader_allowance"],
                 *rates.fetch("checkin_events", {}).values].compact
       return if values.all? { |v| v.is_a?(Integer) && v.between?(0, MAX_RATE) }
 

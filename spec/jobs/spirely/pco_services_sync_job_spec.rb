@@ -46,7 +46,19 @@ RSpec.describe Spirely::PcoServicesSyncJob do
       "relationships" => rels }
   end
 
-  def stub_full_sync(members: nil, times: nil)
+  def stub_teams(leaders: [])
+    stub_pco("/service_types/st1/teams", {
+      "data" => [{ "type" => "Team", "id" => "t1", "attributes" => { "name" => "Band" } }],
+      "included" => leaders.map do |person_id|
+        { "type" => "TeamLeader", "id" => "tl-#{person_id}",
+          "relationships" => { "person" => { "data" => { "type" => "Person", "id" => person_id } },
+                               "team" => { "data" => { "type" => "Team", "id" => "t1" } } } }
+      end,
+    })
+  end
+
+  def stub_full_sync(members: nil, times: nil, leaders: [])
+    stub_teams(leaders: leaders)
     stub_pco("/service_types", { "data" => [{ "type" => "ServiceType", "id" => "st1", "attributes" => { "name" => "Sunday Services" } }] })
     stub_pco("/service_types/st1/plans", { "data" => [plan("pl1", sunday)] })
     stub_pco("#{PLAN_PATH}/plan_times", { "data" => times || [
@@ -133,11 +145,23 @@ RSpec.describe Spirely::PcoServicesSyncJob do
     described_class.perform_now(church.id)
     church.service_plans.sole.update!(sort_date: 3.weeks.ago)
     WebMock.reset!
+    stub_teams
     stub_pco("/service_types", { "data" => [{ "type" => "ServiceType", "id" => "st1", "attributes" => { "name" => "Sunday Services" } }] })
     stub_pco("/service_types/st1/plans", { "data" => [plan("pl1", 3.weeks.ago)] })
     described_class.perform_now(church.id)
 
     expect(a_request(:get, /team_members/)).not_to have_been_made
+  end
+
+  it "reads team leaders it already knows, and drops ones PCO no longer lists" do
+    stub_full_sync(leaders: %w[p1 nobody])
+    described_class.perform_now(church.id)
+    leader = church.service_team_leaders.sole
+    expect(leader).to have_attributes(pco_team_id: "t1", team_name: "Band", person: church.people.find_by!(pco_person_id: "p1"))
+
+    stub_full_sync(leaders: [])
+    described_class.perform_now(church.id)
+    expect(church.service_team_leaders).to be_empty
   end
 
   it "does nothing unless Kudos is on" do
