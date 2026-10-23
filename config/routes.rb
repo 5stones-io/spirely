@@ -52,6 +52,10 @@ Spirely::Engine.routes.draw do
       get    "my_groups/follow_ups/:id",                 to: "my_groups#follow_up"
       post   "my_groups/follow_ups/:id/notes",           to: "my_groups#follow_up_notes"
       # Kudos (5ST-60): the signed-in adult's and their kids' points.
+      get    "time_card",                                to: "time_card#show"
+      post   "time_entries",                             to: "time_card#create"
+      patch  "time_entries/:id",                         to: "time_card#update"
+      delete "time_entries/:id",                         to: "time_card#destroy"
       get    "my_points",                                to: "my_points#show"
       post   "my_points/claim",                          to: "my_points#claim"
       get    "my_points/store",                          to: "my_points#store"
@@ -107,6 +111,12 @@ Spirely::Engine.routes.draw do
         resource  :groups_overview, only: [:show], controller: "groups_overview"
         # Kudos (5ST-60). People are addressed by Planning Center person id
         # — someone can get points before they're synced as a Person.
+        get   "time_entries",                to: "time_entries#index"
+        get   "time_categories",             to: "time_categories#index"
+        post  "time_categories",             to: "time_categories#create"
+        patch "time_categories/:id",         to: "time_categories#update"
+        get   "staff/candidates",            to: "staff#candidates"
+        patch "staff/members/:id",           to: "staff#update_member"
         get   "kudos",                       to: "kudos#overview"
         get   "kudos/people",                to: "kudos#people"
         get   "kudos/people/:pco_person_id", to: "kudos#person", constraints: { pco_person_id: %r{[^/]+} }

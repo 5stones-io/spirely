@@ -57,6 +57,15 @@ RSpec.describe Spirely::TaskRecurrenceGenerator do
       expect(next_task.created_by_membership_id).to eq(membership.id)
     end
 
+    it "carries the time card category forward" do
+      task = create(:spirely_task, recurrence_rule: "daily", recurrence_mode: "absolute", due_date: Date.current)
+      category = task.church.time_categories.create!(code: "FAC", name: "Facilities")
+      task.update!(time_category: category)
+
+      described_class.call(task)
+      expect(Spirely::Task.order(:id).last.time_category).to eq(category)
+    end
+
     it "carries sync_to_pco forward, not derived fresh" do
       task = create(:spirely_task, recurrence_rule: "daily", recurrence_mode: "absolute",
                                     due_date: Date.current, sync_to_pco: true)

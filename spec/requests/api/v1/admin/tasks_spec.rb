@@ -80,7 +80,8 @@ RSpec.describe "Admin Tasks API", type: :request do
 
       use_tenant_host!(church)
       post "/api/v1/admin/tasks",
-           params: { task: { title: "Order VBS supplies", status: "in_progress" } },
+           params: { task: { title: "Order VBS supplies", status: "in_progress",
+                             time_category_id: church.time_categories.create!(code: "EVT", name: "Events").id } },
            headers: auth_headers(admin)
 
       expect(response).to have_http_status(:created)
@@ -96,8 +97,22 @@ RSpec.describe "Admin Tasks API", type: :request do
       create(:membership, :admin, church: church, account: admin)
 
       use_tenant_host!(church)
-      post "/api/v1/admin/tasks", params: { task: { title: "Order VBS supplies" } }, headers: auth_headers(admin)
+      category = church.time_categories.create!(code: "EVT", name: "Events")
+      post "/api/v1/admin/tasks", params: { task: { title: "Order VBS supplies", time_category_id: category.id } },
+                                  headers: auth_headers(admin)
       expect(JSON.parse(response.body)["sync_to_pco"]).to eq(false)
+      expect(JSON.parse(response.body)["time_category"]).to include("code" => "EVT")
+    end
+
+    it "requires a category (time card)" do
+      church = create(:church)
+      admin  = create(:account)
+      create(:membership, :admin, church: church, account: admin)
+
+      use_tenant_host!(church)
+      post "/api/v1/admin/tasks", params: { task: { title: "Order VBS supplies" } }, headers: auth_headers(admin)
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["error"]).to eq("Pick a category for this task.")
     end
 
     it "requires a title" do

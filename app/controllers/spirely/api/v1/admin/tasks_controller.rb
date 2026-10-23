@@ -10,7 +10,7 @@ module Spirely
 
           # GET /api/v1/admin/tasks?status=in_progress&assignee_membership_id=1
           def index
-            scope = Current.church.tasks.includes(:assignee, :created_by)
+            scope = Current.church.tasks.includes(:assignee, :created_by, :time_category)
             scope = scope.where(status: params[:status]) if params[:status].present?
             scope = scope.where(assignee_membership_id: params[:assignee_membership_id]) if params[:assignee_membership_id].present?
 
@@ -31,6 +31,10 @@ module Spirely
           def create
             task = Current.church.tasks.new(task_params)
             task.created_by = Current.membership
+            if task.time_category_id.nil?
+              return render json: { error: "Pick a category for this task.", code: "validation_error" }, status: :unprocessable_entity
+            end
+
             task.save!
 
             render json: task_json(task), status: :created
@@ -70,8 +74,12 @@ module Spirely
           def task_params
             params.require(:task).permit(
               :title, :description, :status, :due_date, :assignee_membership_id,
-              :recurrence_rule, :recurrence_interval, :recurrence_mode, :sync_to_pco
-            )
+              :recurrence_rule, :recurrence_interval, :recurrence_mode, :sync_to_pco, :time_category_id
+            ).tap do |attrs|
+              if attrs[:time_category_id].present? && !Current.church.time_categories.exists?(id: attrs[:time_category_id])
+                raise ActiveRecord::RecordNotFound
+              end
+            end
           end
 
           def task_json(task)
@@ -88,6 +96,7 @@ module Spirely
               recurrence_mode:     task.recurrence_mode,
               recurrence_series_id: task.recurrence_series_id,
               sync_to_pco: task.sync_to_pco,
+              time_category: task.time_category && { id: task.time_category.id, code: task.time_category.code, name: task.time_category.name },
               completed_at: task.completed_at,
               created_at:  task.created_at,
               updated_at:  task.updated_at,
