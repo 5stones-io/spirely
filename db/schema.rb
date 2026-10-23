@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_22_000006) do
+ActiveRecord::Schema[7.2].define(version: 2026_10_23_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -108,6 +108,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000006) do
     t.string "role", default: "family", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "staff", default: false, null: false
     t.index ["account_id", "church_id"], name: "index_memberships_on_account_id_and_church_id", unique: true
     t.index ["church_id"], name: "index_memberships_on_church_id"
   end
@@ -713,11 +714,43 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000006) do
     t.datetime "completed_at"
     t.datetime "next_occurrence_generated_at"
     t.boolean "sync_to_pco", default: false, null: false
+    t.bigint "time_category_id"
     t.index ["assignee_membership_id"], name: "index_spirely_tasks_on_assignee_membership_id"
     t.index ["church_id", "status"], name: "index_spirely_tasks_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_tasks_on_church_id"
     t.index ["recurrence_mode", "next_occurrence_generated_at", "due_date"], name: "index_spirely_tasks_on_absolute_recurrence_sweep"
     t.index ["recurrence_series_id"], name: "index_spirely_tasks_on_recurrence_series_id"
+    t.index ["time_category_id"], name: "index_spirely_tasks_on_time_category_id"
+  end
+
+  create_table "spirely_time_categories", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "code", null: false
+    t.string "name", null: false
+    t.datetime "archived_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "code"], name: "index_spirely_time_categories_on_church_id_and_code", unique: true
+    t.index ["church_id"], name: "index_spirely_time_categories_on_church_id"
+  end
+
+  create_table "spirely_time_entries", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "membership_id", null: false
+    t.bigint "task_id"
+    t.bigint "time_category_id", null: false
+    t.string "title", null: false
+    t.text "description"
+    t.decimal "hours", precision: 5, scale: 2, null: false
+    t.date "worked_on", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "worked_on"], name: "index_spirely_time_entries_on_church_id_and_worked_on"
+    t.index ["church_id"], name: "index_spirely_time_entries_on_church_id"
+    t.index ["membership_id", "worked_on"], name: "index_spirely_time_entries_on_membership_id_and_worked_on"
+    t.index ["membership_id"], name: "index_spirely_time_entries_on_membership_id"
+    t.index ["task_id"], name: "index_spirely_time_entries_on_task_id"
+    t.index ["time_category_id"], name: "index_spirely_time_entries_on_time_category_id"
   end
 
   add_foreign_key "account_email_auth_keys", "accounts", column: "id"
@@ -811,4 +844,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_22_000006) do
   add_foreign_key "spirely_tasks", "churches"
   add_foreign_key "spirely_tasks", "memberships", column: "assignee_membership_id", on_delete: :nullify
   add_foreign_key "spirely_tasks", "memberships", column: "created_by_membership_id", on_delete: :nullify
+  add_foreign_key "spirely_tasks", "spirely_time_categories", column: "time_category_id"
+  add_foreign_key "spirely_time_categories", "churches"
+  add_foreign_key "spirely_time_entries", "churches"
+  add_foreign_key "spirely_time_entries", "memberships"
+  add_foreign_key "spirely_time_entries", "spirely_tasks", column: "task_id", on_delete: :nullify
+  add_foreign_key "spirely_time_entries", "spirely_time_categories", column: "time_category_id"
 end

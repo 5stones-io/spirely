@@ -16,6 +16,10 @@ module Spirely
     belongs_to :church
     belongs_to :assignee,   class_name: "::Membership", foreign_key: :assignee_membership_id, optional: true
     belongs_to :created_by, class_name: "::Membership", foreign_key: :created_by_membership_id, optional: true
+    # The category code its time counts toward (time card). Required when a
+    # task is created through the admin API; older tasks may have none.
+    belongs_to :time_category, class_name: "Spirely::TimeCategory", optional: true
+    has_many :time_entries, class_name: "Spirely::TimeEntry", dependent: :nullify
 
     validates :title, presence: true
     validates :status, inclusion: { in: STATUSES }

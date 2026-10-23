@@ -37,7 +37,8 @@ module Spirely
           recurrence_interval:   task.recurrence_interval,
           recurrence_mode:       task.recurrence_mode,
           recurrence_series_id:  series_id,
-          sync_to_pco:           task.sync_to_pco
+          sync_to_pco:           task.sync_to_pco,
+          time_category_id:      task.time_category_id
         )
 
         task.update!(recurrence_series_id: series_id, next_occurrence_generated_at: Time.current)
