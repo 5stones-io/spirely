@@ -60,6 +60,11 @@ RSpec.describe "Time card", type: :request do
     expect(entry.reload.hours).to eq(1)
   end
 
+  it "tells a staff member's home it can link to the time card" do
+    get "/api/v1/me", headers: auth_headers(sam)
+    expect(json["time_card"]).to be(true)
+  end
+
   it "is only for staff and admins" do
     family = create(:account).tap { |a| create(:membership, church: church, account: a) }
     get "/api/v1/time_card", headers: auth_headers(family)

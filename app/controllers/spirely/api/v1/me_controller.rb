@@ -37,6 +37,9 @@ module Spirely
             # landing page; this lets other screens offer extra entry
             # points (e.g. Small Groups' "My Groups").
             capabilities: capabilities,
+            # Can use the time card: admins, owners and members marked as
+            # staff — lets a non-admin staff member's home link to it.
+            time_card: !!Current.membership&.time_card?,
           }
         end
 
