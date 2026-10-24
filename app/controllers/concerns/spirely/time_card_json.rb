@@ -23,7 +23,23 @@ module Spirely
       json
     end
 
-    def person_name(membership) = membership.account.name.presence || membership.account.email
+    # Who logged the hours, for screens: their name, else their email.
+    def person_name(membership) = real_name(membership) || membership.account.email
+
+    # Their name, or nil: the account's own, else that of the one Planning
+    # Center person with the same email (accounts made without an invite
+    # have no name). Skipped when several people share the email, as
+    # spouses often do, rather than guess.
+    def real_name(membership)
+      @real_names ||= {}
+      return @real_names[membership.account_id] if @real_names.key?(membership.account_id)
+
+      account = membership.account
+      @real_names[membership.account_id] = account.name.presence || begin
+        matches = Current.church.people.where("LOWER(email) = ?", account.email.to_s.downcase).limit(2).to_a
+        matches.one? ? matches.first.full_name.presence : nil
+      end
+    end
 
     # Hours per category, biggest first.
     def totals_by_category(entries)
