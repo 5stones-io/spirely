@@ -20,7 +20,12 @@ Rails.application.configure do
   config.active_support.disallowed_deprecation = :raise
   config.active_support.disallowed_deprecation_warnings = []
 
-  config.active_record.migration_error = :page_load
+  # No per-request pending-migration check in tests: it runs on whichever
+  # request spec happens to go first, and Rails 7.2 rejects migration
+  # timestamps "in the future" — so a spec that travels back in time
+  # before the newest migration failed at random. spec/rails_helper.rb
+  # checks once at boot instead, at the real current time.
+  config.active_record.migration_error = false
   config.active_record.dump_schema_after_migration = false
 
   config.active_storage.service = :test
