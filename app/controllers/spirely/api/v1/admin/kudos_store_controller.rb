@@ -3,13 +3,16 @@ module Spirely
     module V1
       module Admin
         # Staff side of the Kudos store (5ST-63): the catalog, the pickup
-        # queue, and checkout at a table. Admins only, like the rest of
-        # the staff Kudos screens.
+        # queue, and checkout at a table. Admins only, except that Kudos
+        # helpers can run the store desk: read the catalog, see the pickup
+        # queue (waiting orders only), hand orders over, and check out.
         class KudosStoreController < BaseController
           include Spirely::KudosJson
 
           before_action -> { require_module!("kudos") }
-          before_action :require_admin!
+          STORE_DESK = %i[items orders fulfill checkout].freeze
+          before_action :require_admin!, except: STORE_DESK
+          before_action :require_store_desk!, only: STORE_DESK
 
           ORDERS_PER_PAGE = 50
 
@@ -47,10 +50,11 @@ module Spirely
           end
 
           # GET /api/v1/admin/kudos/store/orders?status=pending|all&page=
-          # Pending is the pickup queue, oldest first; all is newest first.
+          # Pending is the pickup queue, oldest first; all is newest first
+          # (admins only — helpers always get the queue).
           def orders
             scope = Current.church.store_orders.includes(:person, :codes, item: { image_attachment: :blob })
-            scope = params[:status] == "all" ? scope.newest_first : scope.pending.order(:created_at, :id)
+            scope = params[:status] == "all" && admin? ? scope.newest_first : scope.pending.order(:created_at, :id)
             page = scope.page(params[:page]).per(ORDERS_PER_PAGE)
             render json: {
               orders: page.map { |o| store_order_json(o, with_person: true) },

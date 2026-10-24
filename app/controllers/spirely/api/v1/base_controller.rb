@@ -119,6 +119,12 @@ module Spirely
           render json: { error: "Forbidden", code: "forbidden" }, status: :forbidden
         end
 
+        # Admins, or members marked as Kudos helpers (Membership#store_desk?).
+        def require_store_desk!
+          return if admin? || Current.membership&.store_desk?
+          render json: { error: "Forbidden", code: "forbidden" }, status: :forbidden
+        end
+
         # Ministry modules (kidsmin, future ones) — gated per-church at the
         # controller layer, not a routing difference (see CLAUDE.md's
         # module-toggle reorganization). 404, not 403 — a disabled module
