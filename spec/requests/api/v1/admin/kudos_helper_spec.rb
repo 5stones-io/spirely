@@ -41,10 +41,15 @@ RSpec.describe "Kudos helpers", type: :request do
     expect(json).to include("status" => "fulfilled", "fulfilled_by" => "Lee Smith")
   end
 
-  it "can't cancel orders, edit the store, award points or see the people list" do
+  it "cancels a waiting order, giving the points back" do
     order = store.redeem!(pco_person_id: "p1", item_id: shirt.id)
+    post "/api/v1/admin/kudos/store/orders/#{order.id}/cancel", headers: auth_headers(helper)
+    expect(json).to include("status" => "cancelled", "cancelled_by" => "Lee Smith")
+    expect(kudos.totals(sarah)[:balance]).to eq(500)
+  end
+
+  it "can't edit the store, award points or see the people list" do
     requests = [
-      -> { post "/api/v1/admin/kudos/store/orders/#{order.id}/cancel", headers: auth_headers(helper) },
       -> { patch "/api/v1/admin/kudos/store/items/#{shirt.id}", params: { points: 1 }, headers: auth_headers(helper), as: :json },
       -> { post "/api/v1/admin/kudos/entries", params: { pco_person_id: "p1", points: 10 }, headers: auth_headers(helper), as: :json },
       -> { get "/api/v1/admin/kudos/people", headers: auth_headers(helper) },
@@ -55,7 +60,6 @@ RSpec.describe "Kudos helpers", type: :request do
       req.call
       expect(response).to have_http_status(:forbidden)
     end
-    expect(order.reload.status).to eq("pending")
   end
 
   it "keeps everyone else out of the store desk" do
