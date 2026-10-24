@@ -15,7 +15,8 @@ class Membership < ApplicationRecord
   # Can use the time card: admins and owners, and members marked as staff.
   def time_card? = staff? || admin_or_owner?
 
-  # Can run the Kudos store desk (checkout and the pickup queue): admins
+  # Can run the Kudos store desk (checkout and the pickup queue, handing
+  # orders over or cancelling them): admins
   # and owners, and members marked as Kudos helpers.
   def store_desk? = kudos_helper? || admin_or_owner?
 end
