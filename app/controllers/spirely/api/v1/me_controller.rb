@@ -40,6 +40,9 @@ module Spirely
             # Can use the time card: admins, owners and members marked as
             # staff — lets a non-admin staff member's home link to it.
             time_card: !!Current.membership&.time_card?,
+            # Can run the Kudos store desk (checkout and pickup): admins,
+            # owners and Kudos helpers, when Kudos is on.
+            store_desk: !!(Current.church.module_enabled?("kudos") && Current.membership&.store_desk?),
           }
         end
 

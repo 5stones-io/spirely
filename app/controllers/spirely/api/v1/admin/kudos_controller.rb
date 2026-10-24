@@ -12,7 +12,9 @@ module Spirely
           include Spirely::KudosJson
 
           before_action -> { require_module!("kudos") }
-          before_action :require_admin!
+          # Kudos helpers can search people (with balances) for checkout.
+          before_action :require_admin!, unless: -> { action_name == "people" && params[:q].present? }
+          before_action :require_store_desk!, only: :people
 
           PER_PAGE = 50
           HISTORY_PER_PAGE = 25
