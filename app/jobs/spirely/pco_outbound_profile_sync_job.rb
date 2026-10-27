@@ -18,6 +18,7 @@ module Spirely
           attributes: pco_attributes(family)
         }
       })
+      Spirely::PcoAddress.push(client, family.pco_person_id, family.address)
 
       family.update_column(:pco_last_synced_at, Time.current)
       Rails.logger.info("[Spirely] PcoOutboundProfileSyncJob complete for family #{family_id} (church #{church.id})")

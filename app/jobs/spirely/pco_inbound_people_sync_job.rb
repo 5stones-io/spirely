@@ -26,6 +26,7 @@ module Spirely
 
       people    = response["data"]
       included  = response["included"]
+      decode_names!(people + included)
 
       if tagged_hh_ids
         people = people.select { |p|
@@ -169,7 +170,7 @@ module Spirely
       attrs   = person["attributes"]
       email   = primary_value(emails[pco_id], "address")
       phone   = primary_value(phones[pco_id], "number")
-      address = format_address(primary_record(addresses[pco_id]))
+      address = Spirely::PcoAddress.format(primary_record(addresses[pco_id]))
 
       pco_attrs = {
         pco_person_id:      pco_id,
@@ -284,15 +285,15 @@ module Spirely
       records.find { |r| r.dig("attributes", "primary") } || records.first
     end
 
-    def format_address(record)
-      return nil unless record
-      a = record["attributes"] || {}
-      parts = [
-        a["street"],
-        a["city"],
-        [a["state"], a["zip"]].compact.join(" ")
-      ].map(&:presence).compact
-      parts.join(", ").presence
+    # PCO can return names HTML-escaped ("Bigz &amp; Afua"); store them as
+    # typed.
+    def decode_names!(records)
+      records.each do |r|
+        attrs = r["attributes"] or next
+        %w[first_name last_name name].each do |key|
+          attrs[key] = CGI.unescapeHTML(attrs[key]) if attrs[key].is_a?(String)
+        end
+      end
     end
   end
 end
