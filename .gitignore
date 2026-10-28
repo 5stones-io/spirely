@@ -29,3 +29,6 @@ Thumbs.db
 # Docs pulled in from kidspire during scaffolding, not tracked here
 CLAUDE_CODE_CONTEXT.md
 CLAUDE.md
+
+# SimpleCov
+coverage/
