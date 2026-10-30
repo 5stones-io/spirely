@@ -56,6 +56,11 @@ Spirely::Engine.routes.draw do
       post   "time_entries",                             to: "time_card#create"
       patch  "time_entries/:id",                         to: "time_card#update"
       delete "time_entries/:id",                         to: "time_card#destroy"
+      # Staff's own tasks: only those assigned to them (admins manage all
+      # through admin/tasks).
+      get    "my_tasks",                                 to: "my_tasks#index"
+      get    "my_tasks/:id",                             to: "my_tasks#show"
+      patch  "my_tasks/:id",                             to: "my_tasks#update"
       get    "my_points",                                to: "my_points#show"
       post   "my_points/claim",                          to: "my_points#claim"
       get    "my_points/store",                          to: "my_points#store"

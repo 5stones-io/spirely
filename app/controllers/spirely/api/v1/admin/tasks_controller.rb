@@ -5,6 +5,8 @@ module Spirely
         # v1 scope (5ST-6): the Spirely-native Task entity's own CRUD —
         # no PCO Workflow sync here yet (see Spirely::Task's own comment).
         class TasksController < BaseController
+          include Spirely::TaskEndpoints
+
           before_action :require_admin!
           before_action :set_task, only: %i[show update destroy]
 
@@ -44,16 +46,7 @@ module Spirely
 
           # PATCH /api/v1/admin/tasks/:id
           def update
-            @task.update!(task_params)
-
-            # Relative recurrence regenerates off actual completion;
-            # absolute recurrence is due-date-driven regardless of
-            # completion (see Spirely::TaskRecurrenceGenerationJob) so
-            # it's never triggered from here.
-            if @task.saved_change_to_status? && @task.complete? && @task.recurrence_mode == "relative"
-              Spirely::TaskRecurrenceGenerator.call(@task)
-            end
-
+            update_task!(@task, task_params)
             render json: task_json(@task)
           rescue ActiveRecord::RecordInvalid => e
             render json: { error: e.message, code: "validation_error" }, status: :unprocessable_entity
@@ -75,33 +68,9 @@ module Spirely
             params.require(:task).permit(
               :title, :description, :status, :due_date, :assignee_membership_id,
               :recurrence_rule, :recurrence_interval, :recurrence_mode, :sync_to_pco, :time_category_id
-            ).tap do |attrs|
-              if attrs[:time_category_id].present? && !Current.church.time_categories.exists?(id: attrs[:time_category_id])
-                raise ActiveRecord::RecordNotFound
-              end
-            end
+            ).tap { |attrs| check_time_category!(attrs) }
           end
 
-          def task_json(task)
-            {
-              id:          task.id,
-              title:       task.title,
-              description: task.description,
-              status:      task.status,
-              due_date:    task.due_date,
-              assignee:    task.assignee && { id: task.assignee.id, email: task.assignee.account.email, name: task.assignee.account.name },
-              created_by:  task.created_by && { id: task.created_by.id, email: task.created_by.account.email, name: task.created_by.account.name },
-              recurrence_rule:     task.recurrence_rule,
-              recurrence_interval: task.recurrence_interval,
-              recurrence_mode:     task.recurrence_mode,
-              recurrence_series_id: task.recurrence_series_id,
-              sync_to_pco: task.sync_to_pco,
-              time_category: task.time_category && { id: task.time_category.id, code: task.time_category.code, name: task.time_category.name },
-              completed_at: task.completed_at,
-              created_at:  task.created_at,
-              updated_at:  task.updated_at,
-            }
-          end
         end
       end
     end
