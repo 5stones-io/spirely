@@ -26,6 +26,22 @@ RSpec.describe Spirely::Child, type: :model do
     it "allows a nil grade" do
       expect(build(:spirely_child, grade: nil)).to be_valid
     end
+
+    it "rejects an unknown allergen value" do
+      child = build(:spirely_child, allergens: ["peanuts", "made_up_allergen"])
+      expect(child).not_to be_valid
+      expect(child.errors[:allergens].first).to include("made_up_allergen")
+    end
+
+    it "accepts a known allergen value" do
+      expect(build(:spirely_child, allergens: ["peanuts", "dairy"])).to be_valid
+    end
+  end
+
+  it "inherits church_id from its family" do
+    family = create(:spirely_family)
+    child  = create(:spirely_child, family: family)
+    expect(child.church_id).to eq(family.church_id)
   end
 
   describe "#grade=" do
@@ -38,6 +54,7 @@ RSpec.describe Spirely::Child, type: :model do
       expect(build(:spirely_child, grade: "3rd").grade).to eq(3)
       expect(build(:spirely_child, grade: "K").grade).to eq(0)
       expect(build(:spirely_child, grade: "kindergarten").grade).to eq(0)
+      expect(build(:spirely_child, grade: "Pre-K").grade).to eq(-1)
     end
   end
 
@@ -56,6 +73,73 @@ RSpec.describe Spirely::Child, type: :model do
     it "returns first and last name" do
       child = build(:spirely_child, first_name: "Sam", last_name: "Smith")
       expect(child.full_name).to eq("Sam Smith")
+    end
+  end
+
+  describe "#update_medical!" do
+    it "sets allergens/allergy_notes and stamps allergy_updated_at, leaving updated_at's own meaning intact" do
+      child = create(:spirely_child, allergens: [], allergy_notes: nil, allergy_updated_at: nil)
+
+      travel_to Time.zone.local(2026, 1, 1, 12, 0, 0) do
+        child.update_medical!(allergens: ["peanuts"], allergy_notes: "Carries an EpiPen")
+      end
+
+      expect(child.reload.allergens).to eq(["peanuts"])
+      expect(child.allergy_notes).to eq("Carries an EpiPen")
+      expect(child.allergy_updated_at).to eq(Time.zone.local(2026, 1, 1, 12, 0, 0))
+    end
+  end
+
+  describe "#allergy_summary" do
+    it "combines allergen labels and free-text notes" do
+      child = build(:spirely_child, allergens: ["peanuts", "tree_nuts"], allergy_notes: "Carries an EpiPen")
+      expect(child.allergy_summary).to eq("Peanuts, Tree Nuts — Carries an EpiPen")
+    end
+
+    it "is just the allergen labels when there's no free-text note" do
+      child = build(:spirely_child, allergens: ["dairy"], allergy_notes: nil)
+      expect(child.allergy_summary).to eq("Dairy/Milk")
+    end
+
+    it "is just the free-text note when there are no structured allergens" do
+      child = build(:spirely_child, allergens: [], allergy_notes: "Gets nosebleeds easily")
+      expect(child.allergy_summary).to eq("Gets nosebleeds easily")
+    end
+
+    it "is nil when neither is set" do
+      child = build(:spirely_child, allergens: [], allergy_notes: nil)
+      expect(child.allergy_summary).to be_nil
+    end
+  end
+
+  describe "#person" do
+    it "finds the Spirely::Person sharing this child's pco_person_id" do
+      church = create(:church)
+      family = create(:spirely_family, church: church)
+      child  = create(:spirely_child, family: family, pco_person_id: "pco-kid-1")
+      person = create(:spirely_person, church: church, pco_person_id: "pco-kid-1")
+
+      expect(child.person).to eq(person)
+    end
+
+    it "is nil when pco_person_id is blank" do
+      child = create(:spirely_child, pco_person_id: nil)
+      expect(child.person).to be_nil
+    end
+
+    it "is nil when no matching Person has synced yet" do
+      child = create(:spirely_child, pco_person_id: "pco-kid-unsynced")
+      expect(child.person).to be_nil
+    end
+
+    it "does not cross-contaminate a different church's Person with the same pco_person_id" do
+      church_a = create(:church, slug: "church-a")
+      church_b = create(:church, slug: "church-b")
+      family   = create(:spirely_family, church: church_a)
+      child    = create(:spirely_child, family: family, pco_person_id: "shared-id")
+      create(:spirely_person, church: church_b, pco_person_id: "shared-id")
+
+      expect(child.person).to be_nil
     end
   end
 
