@@ -66,7 +66,7 @@ module Spirely
         # the family deletes and reposts instead. Keeps "what did staff
         # actually approve" unambiguous without a re-moderation flow.
         def update
-          unless @family_post.pending? || @family_post.moderated_at.nil?
+          unless @family_post.editable?
             return render json: { error: "This post has already been reviewed and can no longer be edited",
                                    code: "already_moderated" }, status: :unprocessable_entity
           end
@@ -125,6 +125,8 @@ module Spirely
             status:      post.status,
             body:        post.body,
             family_id:   post.family_id,
+            mine:        post.family_id == current_family.id,
+            editable:    post.family_id == current_family.id && post.editable?,
             child:       post.child && { id: post.child.id, first_name: post.child.first_name },
             author_name: post.guardian ? "#{post.guardian.first_name} #{post.guardian.last_name}".strip : post.family.primary_contact_name,
             rejected_reason: post.rejected_reason,

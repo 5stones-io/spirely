@@ -43,6 +43,10 @@ module Spirely
     def approved? = status == "approved"
     def rejected? = status == "rejected"
 
+    # Its family can change it until staff have reviewed it: while pending,
+    # or auto-approved and never moderated.
+    def editable? = pending? || moderated_at.nil?
+
     def approve!(membership)
       update!(status: "approved", moderated_by: membership, moderated_at: Time.current, rejected_reason: nil)
     end
