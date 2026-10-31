@@ -38,6 +38,7 @@ Spirely::Engine.routes.draw do
       resource  :family,   only: [:show, :update]
       resources :children, only: [:index, :create, :update, :destroy]
       resources :family_posts, only: [:index, :show, :create, :update, :destroy]
+      get "family_post_photos/:signed_id", to: "family_post_photos#show"
 
       resource  :sync_settings, only: [:show, :update]
       post "/sync/trigger", to: "sync#trigger"

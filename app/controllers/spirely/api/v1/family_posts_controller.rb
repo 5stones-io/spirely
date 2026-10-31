@@ -7,6 +7,8 @@ module Spirely
       # Admin::FamilyPostsController, since it's a different role with a
       # different view of the same table.
       class FamilyPostsController < BaseController
+        include Spirely::FamilyPostPhotosJson
+
         before_action :require_family!
         before_action :set_own_post, only: %i[update destroy]
         before_action :set_visible_post, only: %i[show]
@@ -23,7 +25,7 @@ module Spirely
                                  "approved", "church", current_family.id)
           scope = scope.where(post_type: params[:post_type]) if params[:post_type].present?
 
-          posts = scope.includes(:family, :guardian, :child)
+          posts = scope.includes(:family, :guardian, :child, photos_attachments: :blob)
                         .order(created_at: :desc)
                         .page(params[:page]).per(25)
 
@@ -39,14 +41,20 @@ module Spirely
         end
 
         # POST /api/v1/family_posts
+        #
+        # Photos come as family_post[photos][] in a multipart body. They're
+        # checked before any is uploaded, and a bad one saves nothing.
         def create
           post = current_family.family_posts.new(post_params)
           post.church = Current.church
           post.guardian = current_guardian
-          post.save!
+          FamilyPost.transaction do
+            post.save!
+            post.attach_photos(photo_params[:photos]) if photo_params[:photos].present?
+          end
 
           render json: post_json(post), status: :created
-        rescue ActiveRecord::RecordInvalid => e
+        rescue ActiveRecord::RecordInvalid, FamilyPost::PhotoError => e
           render json: { error: e.message, code: "validation_error" }, status: :unprocessable_entity
         end
 
@@ -63,9 +71,18 @@ module Spirely
                                    code: "already_moderated" }, status: :unprocessable_entity
           end
 
-          @family_post.update!(post_params)
-          render json: post_json(@family_post)
-        rescue ActiveRecord::RecordInvalid => e
+          # Only this post's own photos; ids from anywhere else are ignored.
+          removed = @family_post.photos_attachments.where(id: Array(photo_params[:remove_photo_ids])).to_a
+          FamilyPost.transaction do
+            @family_post.update!(post_params)
+            removed.each(&:delete)
+            @family_post.photos_attachments.reset
+            @family_post.attach_photos(photo_params[:photos]) if photo_params[:photos].present?
+          end
+          # The files go only once the change has saved.
+          removed.each { |a| a.blob.purge_later }
+          render json: post_json(@family_post.reload)
+        rescue ActiveRecord::RecordInvalid, FamilyPost::PhotoError => e
           render json: { error: e.message, code: "validation_error" }, status: :unprocessable_entity
         end
 
@@ -96,6 +113,10 @@ module Spirely
           params.require(:family_post).permit(:post_type, :audience, :body, :child_id)
         end
 
+        def photo_params
+          params.require(:family_post).permit(photos: [], remove_photo_ids: [])
+        end
+
         def post_json(post)
           {
             id:          post.id,
@@ -107,6 +128,7 @@ module Spirely
             child:       post.child && { id: post.child.id, first_name: post.child.first_name },
             author_name: post.guardian ? "#{post.guardian.first_name} #{post.guardian.last_name}".strip : post.family.primary_contact_name,
             rejected_reason: post.rejected_reason,
+            photos:      post_photos_json(post),
             created_at:  post.created_at,
             updated_at:  post.updated_at,
           }
