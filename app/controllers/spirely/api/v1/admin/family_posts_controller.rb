@@ -8,12 +8,14 @@ module Spirely
         # given family its own posts plus the church-wide approved feed),
         # and can approve/reject/remove.
         class FamilyPostsController < BaseController
+          include Spirely::FamilyPostPhotosJson
+
           before_action :require_admin!
           before_action :set_post, only: %i[show destroy approve reject]
 
           # GET /api/v1/admin/family_posts?status=pending&post_type=prayer_request
           def index
-            scope = Current.church.family_posts.includes(:family, :guardian, :child)
+            scope = Current.church.family_posts.includes(:family, :guardian, :child, photos_attachments: :blob)
             scope = scope.where(status: params[:status]) if params[:status].present?
             scope = scope.where(post_type: params[:post_type]) if params[:post_type].present?
             scope = scope.where(audience: params[:audience]) if params[:audience].present?
@@ -79,6 +81,7 @@ module Spirely
               child:       post.child && { id: post.child.id, first_name: post.child.first_name },
               author_name: post.guardian ? "#{post.guardian.first_name} #{post.guardian.last_name}".strip : post.family.primary_contact_name,
               rejected_reason: post.rejected_reason,
+              photos:      post_photos_json(post),
               moderated_at: post.moderated_at,
               moderated_by: post.moderated_by && { id: post.moderated_by.id, email: post.moderated_by.account.email, name: post.moderated_by.account.name },
               created_at:  post.created_at,
