@@ -257,6 +257,58 @@ RSpec.describe Spirely::PcoInboundPeopleSyncJob do
       expect(family).to have_attributes(email: "jane@example.com", phone: "555-0101")
       expect(family.guardians.first).to have_attributes(email: "tom@example.com", phone: "555-0102")
     end
+
+    describe "an email address PCO has that isn't a real one" do
+      let(:hh) { household(id: "hh-1", name: "Smith Household") }
+      let(:jane) { person(id: "p-1", first_name: "Jane", last_name: "Smith", household_id: "hh-1") }
+      let(:kid) { person(id: "p-3", first_name: "Nico", last_name: "Smith", household_id: "hh-1", child: true) }
+
+      it "still brings the family and their kids over, without the email" do
+        stub_people(data: [jane, kid], included: [
+          hh, contact("Email", "e1", "p-1", "address" => "jane at example.com", "primary" => true),
+        ])
+
+        run
+
+        family = church.families.find_by(pco_person_id: "p-1")
+        expect(family).to have_attributes(primary_contact_first_name: "Jane", email: nil)
+        expect(family.children.pluck(:pco_person_id)).to eq(["p-3"])
+      end
+
+      it "takes another of their addresses that works" do
+        stub_people(data: [jane], included: [
+          hh,
+          contact("Email", "e1", "p-1", "address" => "jane at example.com", "primary" => true),
+          contact("Email", "e2", "p-1", "address" => "jane@example.com", "primary" => false),
+        ])
+
+        run
+
+        expect(church.families.find_by(pco_person_id: "p-1").email).to eq("jane@example.com")
+      end
+
+      it "trims spaces around an address" do
+        stub_people(data: [jane], included: [
+          hh, contact("Email", "e1", "p-1", "address" => " jane@example.com ", "primary" => true),
+        ])
+
+        run
+
+        expect(church.families.find_by(pco_person_id: "p-1").email).to eq("jane@example.com")
+      end
+
+      it "keeps the email Spirely already has, still taking PCO's other details" do
+        family = create(:spirely_family, church: church, pco_person_id: "p-1", pco_household_id: "hh-1",
+                                         primary_contact_first_name: "Janie", email: "jane@example.com")
+        stub_people(data: [jane], included: [
+          hh, contact("Email", "e1", "p-1", "address" => "jane at example.com", "primary" => true),
+        ])
+
+        run
+
+        expect(family.reload).to have_attributes(primary_contact_first_name: "Jane", email: "jane@example.com")
+      end
+    end
   end
 
   describe "with a ministry tag" do
@@ -419,8 +471,12 @@ RSpec.describe Spirely::PcoInboundPeopleSyncJob do
         person(id: "p-2", first_name: "Raj", last_name: "Patel", household_id: "hh-2"),
       ], included: [
         household(id: "hh-1", name: "Smith Household"), household(id: "hh-2", name: "Patel Household"),
-        contact("Email", "e1", "p-1", "address" => "not an email", "primary" => true),
       ])
+      allow_any_instance_of(Spirely::Family).to receive(:save!).and_wrap_original do |original, *args|
+        raise ActiveRecord::RecordInvalid, original.receiver if original.receiver.pco_household_id == "hh-1"
+
+        original.call(*args)
+      end
 
       run
 

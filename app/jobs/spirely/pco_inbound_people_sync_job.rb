@@ -168,7 +168,7 @@ module Spirely
     def sync_family(church, family, person, household_id, household, emails, phones, addresses)
       pco_id  = person["id"]
       attrs   = person["attributes"]
-      email   = primary_value(emails[pco_id], "address")
+      email   = usable_email(emails[pco_id])
       phone   = primary_value(phones[pco_id], "number")
       address = Spirely::PcoAddress.format(primary_record(addresses[pco_id]))
 
@@ -192,6 +192,10 @@ module Spirely
         phone:                        phone,
         address:                      address
       }
+      if email == UNUSABLE_EMAIL
+        Rails.logger.warn("[Spirely] PCO email for pco_id=#{pco_id} church=#{church.id} isn't a valid address, leaving the family's email as is")
+        profile_attrs.delete(:email)
+      end
 
       strategy = church.sync_setting.conflict_resolution
 
@@ -278,6 +282,20 @@ module Spirely
       return nil if records.nil?
       primary = records.find { |r| r.dig("attributes", "primary") }
       (primary || records.first)&.dig("attributes", field)
+    end
+
+    UNUSABLE_EMAIL = :unusable
+
+    # PCO doesn't check email addresses and Family does, so one bad address
+    # used to fail the family's save, and their kids then had no family to
+    # join. The primary address if it's valid, else another that is; nil
+    # when PCO has none; UNUSABLE_EMAIL when it has some but none are valid.
+    def usable_email(records)
+      primary, others = Array(records).partition { |r| r.dig("attributes", "primary") }
+      addresses = (primary + others).map { |r| r.dig("attributes", "address").to_s.strip }.reject(&:empty?)
+      return nil if addresses.empty?
+
+      addresses.find { |a| a.match?(URI::MailTo::EMAIL_REGEXP) } || UNUSABLE_EMAIL
     end
 
     def primary_record(records)
