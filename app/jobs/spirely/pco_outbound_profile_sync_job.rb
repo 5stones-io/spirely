@@ -37,7 +37,7 @@ module Spirely
         last_name:  family.primary_contact_last_name,
         contact_data: {
           email_addresses: [
-            { address: family.email, primary: true }
+            family.email.present? ? { address: family.email, primary: true } : nil
           ].compact,
           phone_numbers: [
             family.phone.present? ? { number: family.phone, primary: true } : nil

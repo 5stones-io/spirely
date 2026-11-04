@@ -53,6 +53,28 @@ RSpec.describe Spirely::PcoOutboundProfileSyncJob do
     }).to have_been_made.once
   end
 
+  it "leaves the email out when the family has none, rather than sending a blank one" do
+    family.update_columns(email: nil)
+    stub_patch
+
+    described_class.perform_now(family.id)
+
+    expect(a_request(:patch, PERSON).with { |req|
+      JSON.parse(req.body).dig("data", "attributes", "contact_data", "email_addresses") == []
+    }).to have_been_made.once
+  end
+
+  it "treats a blank email like none" do
+    family.update_columns(email: "")
+    stub_patch
+
+    described_class.perform_now(family.id)
+
+    expect(a_request(:patch, PERSON).with { |req|
+      JSON.parse(req.body).dig("data", "attributes", "contact_data", "email_addresses") == []
+    }).to have_been_made.once
+  end
+
   it "updates the person's address when it changed" do
     family.update_columns(address: "1 Main St, Fairfax, VA 22032")
     stub_patch
