@@ -28,7 +28,7 @@ module Spirely
 
       response = client.paginate(
         "/check-ins/v2/check_ins",
-        include: "person,event_period,check_in_times",
+        include: "person,event_period,check_in_times,event_times",
         "where[created_at][gte]": (first_sync ? HISTORY_WINDOW : SYNC_WINDOW).ago.iso8601
       )
 
@@ -39,9 +39,10 @@ module Spirely
       event_periods   = index_by_id(included, "EventPeriod")
       events          = resolve_events(client, event_periods)
       check_in_times  = index_by_check_in_id(included)
+      event_times     = index_by_id(included, "EventTime")
       locations       = sync_locations(church, client)
 
-      check_ins.each { |ci| sync_check_in(church, ci, people, event_periods, events, check_in_times, locations) }
+      check_ins.each { |ci| sync_check_in(church, ci, people, event_periods, events, check_in_times, event_times, locations) }
       settings.update!(checkins_history_synced_at: Time.current) if first_sync
 
       Rails.logger.info("[Spirely] PcoAttendanceSyncJob complete for church #{church_id} — #{check_ins.size} check-ins")
@@ -98,7 +99,7 @@ module Spirely
                      .transform_values(&:first)
     end
 
-    def sync_check_in(church, check_in, people, event_periods, events, check_in_times, locations)
+    def sync_check_in(church, check_in, people, event_periods, events, check_in_times, event_times, locations)
       attrs           = check_in["attributes"]
       pco_person_id   = check_in.dig("relationships", "person", "data", "id")
       event_period_id = check_in.dig("relationships", "event_period", "data", "id")
@@ -112,6 +113,8 @@ module Spirely
 
       pco_location_id = check_in_times.dig(check_in["id"], "relationships", "location", "data", "id")
       location        = locations[pco_location_id]
+      event_time      = first_event_time(check_in, event_times)
+      et_attrs        = event_time&.dig("attributes") || {}
 
       attendance = church.attendances.find_or_initialize_by(pco_check_in_id: check_in["id"])
       attendance.assign_attributes(
@@ -129,7 +132,13 @@ module Spirely
         # confirmed directly against production data (every real check-in
         # was failing Attendance's kind validation until this normalized).
         kind:           attrs["kind"].presence&.downcase || "regular",
-        one_time_guest: attrs["one_time_guest"] || false
+        one_time_guest: attrs["one_time_guest"] || false,
+        pco_event_time_id:      event_time&.dig("id"),
+        event_time_starts_at:   et_attrs["starts_at"],
+        event_time_name:        et_attrs["name"].presence,
+        event_time_day_of_week: et_attrs["day_of_week"],
+        event_time_hour:        et_attrs["hour"],
+        event_time_minute:      et_attrs["minute"]
       )
       # Re-syncing an already-synced check-in is the only way checked_out_at
       # (and any other PCO-side edit, like medical_notes) ever reaches this
@@ -137,6 +146,14 @@ module Spirely
       attendance.save! if attendance.new_record? || attendance.changed?
     rescue => e
       Rails.logger.error("[Spirely] Failed to sync check-in pco_id=#{check_in["id"]} church=#{church.id}: #{e.message}")
+    end
+
+    # The service time (PCO EventTime) a check-in was for (5ST-75). A
+    # check-in can cover more than one (a kid staying for two services);
+    # the earliest is kept, which is the service they arrived for.
+    def first_event_time(check_in, event_times)
+      ids = Array(check_in.dig("relationships", "event_times", "data")).map { |r| r["id"] }
+      ids.filter_map { |id| event_times[id] }.min_by { |et| et.dig("attributes", "starts_at").to_s }
     end
 
     # Built directly from the check-ins response's included Person data
