@@ -45,6 +45,56 @@ RSpec.describe Spirely::AttendanceHistory do
     expect(rows.second.meetings.map { |m| m[:attended] }).to eq([false, true, false])
   end
 
+  describe "an early check-in time" do
+    # jccag's check-in window opens at 10:10 (during Sunday School) for the
+    # 11:00 service. Sunday School's own attendance is the group roll.
+    def week(n, hour_utc, minute, hour:, name: nil)
+      at = Time.find_zone("UTC").parse("2026-11-08 #{hour_utc}:#{format('%02d', minute)}") - (3 - n).weeks
+      service(at.iso8601, wday: 0, hour: hour, minute: minute, name: name)
+    end
+
+    let(:early)   { (1..3).map { |n| week(n, 15, 10, hour: 10) } }
+    let(:service_) { (1..3).map { |n| week(n, 16, 0, hour: 11) } }
+
+    before { (early + service_).each { |s| check_in(other, s) } }
+
+    it "counts toward the service that starts less than an hour later, with no row of its own" do
+      check_in(kid, early[0])
+      check_in(kid, service_[1])
+
+      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 11:00 AM"])
+      expect(rows.sole.meetings).to eq([
+        { date: "2026-10-25", attended: true }, { date: "2026-11-01", attended: true }, { date: "2026-11-08", attended: false },
+      ])
+    end
+
+    it "gives a kid who only checks in early the later service's row" do
+      check_in(kid, early[2])
+      expect(rows.sole.title).to eq("JCC Kidz · Sunday 11:00 AM")
+      expect(rows.sole.meetings.map { |m| m[:attended] }).to eq([false, false, true])
+    end
+
+    it "uses the later service's PCO name" do
+      named = week(3, 16, 0, hour: 11, name: "JCC Kidz Service")
+      check_in(other, named)
+      check_in(kid, early[2])
+      expect(rows.sole.title).to eq("JCC Kidz · JCC Kidz Service")
+    end
+
+    it "keeps times an hour or more before the next one as their own service" do
+      nine = week(3, 14, 0, hour: 9)
+      check_in(kid, nine)
+      check_in(kid, early[2])
+      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 9:00 AM", "JCC Kidz · Sunday 11:00 AM"])
+    end
+
+    it "only joins times of the same event" do
+      other_event = service("2026-11-08T15:10:00Z", wday: 0, hour: 10, minute: 10, event: "Nursery")
+      check_in(kid, other_event)
+      expect(rows.map(&:title)).to eq(["Nursery · Sunday 10:10 AM"])
+    end
+  end
+
   it "uses PCO's own name for the service time when it has one" do
     s = service("2026-11-08T16:00:00Z", wday: 0, hour: 11, name: "Second Service")
     check_in(kid, s)
