@@ -46,8 +46,8 @@ RSpec.describe Spirely::AttendanceHistory do
   end
 
   describe "an early check-in time" do
-    # jccag's check-in window opens at 10:10 (during Sunday School) for the
-    # 11:00 service. Sunday School's own attendance is the group roll.
+    # jccag's check-in window opens early (9:00, 10:10, during Sunday
+    # School) for the 11:00 service. Sunday School's own attendance is the group roll.
     def week(n, hour_utc, minute, hour:, name: nil)
       at = Time.find_zone("UTC").parse("2026-11-08 #{hour_utc}:#{format('%02d', minute)}") - (3 - n).weeks
       service(at.iso8601, wday: 0, hour: hour, minute: minute, name: name)
@@ -58,7 +58,7 @@ RSpec.describe Spirely::AttendanceHistory do
 
     before { (early + service_).each { |s| check_in(other, s) } }
 
-    it "counts toward the service that starts less than an hour later, with no row of its own" do
+    it "counts toward the service that starts less than 90 minutes later, with no row of its own" do
       check_in(kid, early[0])
       check_in(kid, service_[1])
 
@@ -81,11 +81,20 @@ RSpec.describe Spirely::AttendanceHistory do
       expect(rows.sole.title).to eq("JCC Kidz · JCC Kidz Service")
     end
 
-    it "keeps times an hour or more before the next one as their own service" do
+    it "chains: a 9:00 check-in counts toward 11:00 through 10:10" do
       nine = week(3, 14, 0, hour: 9)
       check_in(kid, nine)
-      check_in(kid, early[2])
-      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 9:00 AM", "JCC Kidz · Sunday 11:00 AM"])
+      check_in(kid, early[1])
+      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 11:00 AM"])
+      expect(rows.sole.meetings.map { |m| m[:attended] }).to eq([false, true, true])
+    end
+
+    it "keeps a time 90 minutes or more before the next one as its own service" do
+      four = service("2026-11-08T21:00:00Z", wday: 0, hour: 16)
+      six  = service("2026-11-08T23:00:00Z", wday: 0, hour: 18)
+      check_in(kid, four)
+      check_in(kid, six)
+      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 4:00 PM", "JCC Kidz · Sunday 6:00 PM"])
     end
 
     it "only joins times of the same event" do

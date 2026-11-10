@@ -17,7 +17,7 @@ module Spirely
   class AttendanceHistory
     MEETINGS_SHOWN = 10
     WINDOW         = 26.weeks
-    JOIN_WITHIN    = 60 # minutes; see #joined_slots
+    JOIN_WITHIN    = 90 # minutes; see #joined_slots
 
     SLOT = %i[event_name event_time_day_of_week event_time_hour event_time_minute].freeze
 
@@ -64,10 +64,11 @@ module Spirely
 
     # Each slot => the slot whose row it counts toward. A service time that
     # starts less than JOIN_WITHIN before the next time of the same event on
-    # the same day counts toward that later one: jccag's check-in window
-    # opens at 10:10, during Sunday School, for the 11:00 service, and
-    # Sunday School's attendance is kept in Groups. (A church setting for
-    # this is planned; see Linear.)
+    # the same day counts toward that later one, and chains: jccag's
+    # check-in times 9:00 and 10:10 (during Sunday School) are all for the
+    # 11:00 service, and Sunday School's attendance is kept in Groups.
+    # 4 PM and 6 PM, two hours apart, stay separate. (A church setting
+    # for this is planned: 5ST-76.)
     def joined_slots(slots)
       into = {}
       slots.group_by { |e, w, _, _| [e, w] }.each_value do |day|
