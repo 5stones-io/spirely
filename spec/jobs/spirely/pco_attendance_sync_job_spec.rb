@@ -78,6 +78,59 @@ RSpec.describe Spirely::PcoAttendanceSyncJob do
     expect(attendance.checked_in_at).to eq(Time.zone.parse("2026-08-01T14:03:00Z"))
   end
 
+  it "stores which service time (PCO EventTime) the check-in was for" do
+    check_in = {
+      id: "checkin-et", type: "CheckIn",
+      attributes: { created_at: "2026-11-08T22:41:00Z", kind: "Regular", one_time_guest: false },
+      relationships: {
+        person: { data: { id: "person-et", type: "Person" } },
+        event_period: { data: { id: "period-1", type: "EventPeriod" } },
+        event_times: { data: [{ id: "et-2", type: "EventTime" }, { id: "et-1", type: "EventTime" }] },
+      },
+    }
+    person = { id: "person-et", type: "Person", attributes: { first_name: "Ava", last_name: "K", child: true } }
+    event_period = { id: "period-1", type: "EventPeriod",
+                     relationships: { event: { data: { id: "event-1", type: "Event" } } } }
+    # Two service times on one check-in: the earlier one is kept.
+    late  = { id: "et-2", type: "EventTime",
+              attributes: { name: nil, starts_at: "2026-11-09T01:00:00Z", day_of_week: 0, hour: 20, minute: 0 } }
+    early = { id: "et-1", type: "EventTime",
+              attributes: { name: "Evening", starts_at: "2026-11-08T23:00:00Z", day_of_week: 0, hour: 18, minute: 0 } }
+
+    stub_check_ins(data: [check_in], included: [person, event_period, late, early])
+    stub_events(event_id: "event-1", name: "JCC Kidz")
+
+    described_class.new.perform(church.id)
+
+    expect(WebMock).to have_requested(:get, "https://api.planningcenteronline.com/check-ins/v2/check_ins")
+      .with(query: hash_including("include" => a_string_including("event_times")))
+    expect(church.attendances.find_by(pco_check_in_id: "checkin-et")).to have_attributes(
+      pco_event_time_id: "et-1", event_time_name: "Evening",
+      event_time_starts_at: Time.zone.parse("2026-11-08T23:00:00Z"),
+      event_time_day_of_week: 0, event_time_hour: 18, event_time_minute: 0
+    )
+  end
+
+  it "leaves the service time blank when PCO sends none" do
+    check_in = {
+      id: "checkin-noet", type: "CheckIn",
+      attributes: { created_at: "2026-11-08T14:41:00Z", kind: "Regular" },
+      relationships: {
+        person: { data: { id: "person-noet", type: "Person" } },
+        event_period: { data: { id: "period-1", type: "EventPeriod" } },
+      },
+    }
+    person = { id: "person-noet", type: "Person", attributes: { first_name: "Bo", last_name: "K", child: true } }
+    event_period = { id: "period-1", type: "EventPeriod",
+                     relationships: { event: { data: { id: "event-1", type: "Event" } } } }
+    stub_check_ins(data: [check_in], included: [person, event_period])
+    stub_events(event_id: "event-1", name: "JCC Kidz")
+
+    described_class.new.perform(church.id)
+
+    expect(church.attendances.find_by(pco_check_in_id: "checkin-noet").pco_event_time_id).to be_nil
+  end
+
   it "trusts a minor's birthdate over PCO's own child:false flag when they check in" do
     check_in = {
       id: "checkin-misclassified", type: "CheckIn",

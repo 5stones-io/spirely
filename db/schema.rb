@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_10_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -130,7 +130,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "location_id"
+    t.string "pco_event_time_id"
+    t.datetime "event_time_starts_at"
+    t.string "event_time_name"
+    t.integer "event_time_day_of_week"
+    t.integer "event_time_hour"
+    t.integer "event_time_minute"
     t.index ["church_id", "pco_check_in_id"], name: "index_spirely_attendances_on_church_id_and_pco_check_in_id", unique: true
+    t.index ["church_id", "pco_event_time_id"], name: "index_spirely_attendances_on_church_id_and_pco_event_time_id"
     t.index ["location_id"], name: "index_spirely_attendances_on_location_id"
     t.index ["person_id", "pco_event_id", "checked_in_at"], name: "index_attendances_on_person_event_checkin"
   end
