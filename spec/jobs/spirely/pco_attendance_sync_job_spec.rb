@@ -95,7 +95,8 @@ RSpec.describe Spirely::PcoAttendanceSyncJob do
     late  = { id: "et-2", type: "EventTime",
               attributes: { name: nil, starts_at: "2026-11-09T01:00:00Z", day_of_week: 0, hour: 20, minute: 0 } }
     early = { id: "et-1", type: "EventTime",
-              attributes: { name: "Evening", starts_at: "2026-11-08T23:00:00Z", day_of_week: 0, hour: 18, minute: 0 } }
+              attributes: { name: "Evening", starts_at: "2026-11-08T23:00:00Z", shows_at: "2026-11-08T22:30:00Z",
+                            day_of_week: 0, hour: 18, minute: 0 } }
 
     stub_check_ins(data: [check_in], included: [person, event_period, late, early])
     stub_events(event_id: "event-1", name: "JCC Kidz")
@@ -107,6 +108,7 @@ RSpec.describe Spirely::PcoAttendanceSyncJob do
     expect(church.attendances.find_by(pco_check_in_id: "checkin-et")).to have_attributes(
       pco_event_time_id: "et-1", event_time_name: "Evening",
       event_time_starts_at: Time.zone.parse("2026-11-08T23:00:00Z"),
+      event_time_shows_at: Time.zone.parse("2026-11-08T22:30:00Z"),
       event_time_day_of_week: 0, event_time_hour: 18, event_time_minute: 0
     )
   end

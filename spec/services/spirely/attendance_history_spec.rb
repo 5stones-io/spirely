@@ -11,14 +11,17 @@ RSpec.describe Spirely::AttendanceHistory do
   let(:other)  { create(:spirely_person, church: church, first_name: "Other") }
 
   # One occurrence of a Check-Ins service time (its own PCO EventTime).
-  def service(starts_at, wday:, hour:, minute: 0, event: "JCC Kidz", name: nil)
-    { id: "et-#{SecureRandom.hex(4)}", starts_at: Time.find_zone("UTC").parse(starts_at), event: event,
+  # opens: minutes before starts_at that its check-in window opens (nil:
+  # not known, as on rows synced before 0.29.0).
+  def service(starts_at, wday:, hour:, minute: 0, event: "JCC Kidz", name: nil, opens: 30)
+    at = Time.find_zone("UTC").parse(starts_at)
+    { id: "et-#{SecureRandom.hex(4)}", starts_at: at, shows_at: opens && at - opens.minutes, event: event,
       wday: wday, hour: hour, minute: minute, name: name }
   end
 
   def check_in(person, svc, kind: "regular")
     create(:spirely_attendance, person: person, event_name: svc[:event], checked_in_at: svc[:starts_at] - 10.minutes,
-           kind: kind, pco_event_time_id: svc[:id], event_time_starts_at: svc[:starts_at], event_time_name: svc[:name],
+           kind: kind, pco_event_time_id: svc[:id], event_time_starts_at: svc[:starts_at], event_time_shows_at: svc[:shows_at], event_time_name: svc[:name],
            event_time_day_of_week: svc[:wday], event_time_hour: svc[:hour], event_time_minute: svc[:minute])
   end
 
@@ -46,19 +49,20 @@ RSpec.describe Spirely::AttendanceHistory do
   end
 
   describe "an early check-in time" do
-    # jccag's check-in window opens at 10:10 (during Sunday School) for the
-    # 11:00 service. Sunday School's own attendance is the group roll.
-    def week(n, hour_utc, minute, hour:, name: nil)
+    # jccag's 11:00 JCC Kidz check-in opens at 8:30, so check-ins at its
+    # 9:00 and 10:10 times (during Sunday School) are for 11:00. Sunday
+    # School's own attendance is the group roll.
+    def week(n, hour_utc, minute, hour:, name: nil, opens: 30)
       at = Time.find_zone("UTC").parse("2026-11-08 #{hour_utc}:#{format('%02d', minute)}") - (3 - n).weeks
-      service(at.iso8601, wday: 0, hour: hour, minute: minute, name: name)
+      service(at.iso8601, wday: 0, hour: hour, minute: minute, name: name, opens: opens)
     end
 
-    let(:early)   { (1..3).map { |n| week(n, 15, 10, hour: 10) } }
-    let(:service_) { (1..3).map { |n| week(n, 16, 0, hour: 11) } }
+    let(:early)    { (1..3).map { |n| week(n, 15, 10, hour: 10, opens: 120) } }
+    let(:service_) { (1..3).map { |n| week(n, 16, 0, hour: 11, opens: 150) } }
 
     before { (early + service_).each { |s| check_in(other, s) } }
 
-    it "counts toward the service that starts less than an hour later, with no row of its own" do
+    it "counts toward the later service whose check-in window it starts in, with no row of its own" do
       check_in(kid, early[0])
       check_in(kid, service_[1])
 
@@ -68,36 +72,52 @@ RSpec.describe Spirely::AttendanceHistory do
       ])
     end
 
-    it "gives a kid who only checks in early the later service's row" do
+    it "counts a 9:00 check-in toward 11:00 too" do
+      check_in(kid, week(3, 14, 0, hour: 9))
+      check_in(kid, early[1])
+      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 11:00 AM"])
+      expect(rows.sole.meetings.map { |m| m[:attended] }).to eq([false, true, true])
+    end
+
+    it "gives a kid who only checks in early the later service's row, with its PCO name" do
+      check_in(other, week(3, 16, 0, hour: 11, name: "JCC Kidz Service", opens: 150))
       check_in(kid, early[2])
-      expect(rows.sole.title).to eq("JCC Kidz · Sunday 11:00 AM")
+      expect(rows.sole.title).to eq("JCC Kidz · JCC Kidz Service")
       expect(rows.sole.meetings.map { |m| m[:attended] }).to eq([false, false, true])
     end
 
-    it "uses the later service's PCO name" do
-      named = week(3, 16, 0, hour: 11, name: "JCC Kidz Service")
-      check_in(other, named)
-      check_in(kid, early[2])
-      expect(rows.sole.title).to eq("JCC Kidz · JCC Kidz Service")
+    it "keeps a time that starts before the next one's window opens as its own service" do
+      %w[2026-11-01 2026-11-08].each do |d|
+        check_in(kid, service("#{d}T21:00:00Z", wday: 0, hour: 16))
+        check_in(kid, service("#{d}T23:00:00Z", wday: 0, hour: 18)) # opens 5:30
+      end
+      expect(rows.map(&:title)).to include("JCC Kidz · Sunday 4:00 PM", "JCC Kidz · Sunday 6:00 PM")
     end
 
-    it "keeps times an hour or more before the next one as their own service" do
-      nine = week(3, 14, 0, hour: 9)
-      check_in(kid, nine)
-      check_in(kid, early[2])
-      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 9:00 AM", "JCC Kidz · Sunday 11:00 AM"])
+    it "uses the 90 minute rule for check-ins synced before windows were stored" do
+      old_early = week(1, 15, 10, hour: 10, opens: nil)
+      old_late  = week(1, 16, 0, hour: 11, opens: nil)
+      [old_early, old_late].each { |s| check_in(other, s) }
+      check_in(kid, old_early)
+      expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 11:00 AM"])
     end
 
     it "only joins times of the same event" do
-      other_event = service("2026-11-08T15:10:00Z", wday: 0, hour: 10, minute: 10, event: "Nursery")
-      check_in(kid, other_event)
+      2.times { |w| check_in(kid, service((Time.utc(2026, 11, 8, 15, 10) - w.weeks).iso8601, wday: 0, hour: 10, minute: 10, event: "Nursery")) }
       expect(rows.map(&:title)).to eq(["Nursery · Sunday 10:10 AM"])
     end
   end
 
+  it "leaves out a service time that only happened once, like a musical" do
+    musical = service("2026-10-18T20:00:00Z", wday: 0, hour: 16, name: "Musical 2026")
+    check_in(other, musical)
+    check_in(kid, musical)
+    sundays(16, 2, hour: 11).each { |s| check_in(kid, s) }
+    expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 11:00 AM"])
+  end
+
   it "uses PCO's own name for the service time when it has one" do
-    s = service("2026-11-08T16:00:00Z", wday: 0, hour: 11, name: "Second Service")
-    check_in(kid, s)
+    %w[2026-11-01 2026-11-08].each { |d| check_in(kid, service("#{d}T16:00:00Z", wday: 0, hour: 11, name: "Second Service")) }
     expect(rows.sole.title).to eq("JCC Kidz · Second Service")
   end
 
@@ -110,8 +130,8 @@ RSpec.describe Spirely::AttendanceHistory do
 
   it "only uses the church's kids services when some are mapped" do
     church.create_sync_setting!(pco_kids_service_types: [{ "check_ins_event_name" => "JCC Kidz" }])
-    check_in(kid, service("2026-11-08T16:00:00Z", wday: 0, hour: 11))
-    check_in(kid, service("2026-11-07T15:00:00Z", wday: 6, hour: 10, event: "Christmas Musical"))
+    sundays(16, 2, hour: 11).each { |s| check_in(kid, s) }
+    sundays(15, 2, wday: 6, hour: 10).each { |s| check_in(kid, s.merge(event: "Christmas Musical")) }
     expect(rows.map(&:title)).to eq(["JCC Kidz · Sunday 11:00 AM"])
   end
 
@@ -182,7 +202,7 @@ RSpec.describe Spirely::AttendanceHistory do
       rr = kids_group("Adventure Rangers", rangers)
       member!(rr)
       meetings!(rr, [1]) # Wednesday 7 PM Eastern
-      check_in(kid, service("2026-11-08T16:00:00Z", wday: 0, hour: 11))
+      sundays(16, 2, hour: 11).each { |s| check_in(kid, s) }
 
       expect(rows.map(&:title)).to eq(["Sunday School", "JCC Kidz · Sunday 11:00 AM", "Royal Rangers"])
     end
