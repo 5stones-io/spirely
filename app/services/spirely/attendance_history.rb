@@ -17,7 +17,7 @@ module Spirely
   class AttendanceHistory
     MEETINGS_SHOWN = 10
     WINDOW         = 26.weeks
-    JOIN_WITHIN    = 90 # minutes; see #joined_slots
+    JOIN_WITHIN    = 90 # minutes; see #joined_times
 
     SLOT = %i[event_name event_time_day_of_week event_time_hour event_time_minute].freeze
 
@@ -42,48 +42,59 @@ module Spirely
       scope = @church.attendances.where.not(pco_event_time_id: nil).where(event_time_starts_at: WINDOW.ago..)
       names = kids_event_names
       scope = scope.where(event_name: names) if names.any?
-      mine  = scope.where(person_id: @person.id)
-      my_slots = mine.distinct.pluck(*SLOT)
-      return [] if my_slots.empty?
+      mine = scope.where(person_id: @person.id).distinct.pluck(:pco_event_time_id).to_set
+      return [] if mine.empty?
 
-      into = joined_slots(scope.distinct.pluck(*SLOT))
-      my_slots.map { |s| into[s] }.uniq.filter_map do |target|
-        event_name, wday, hour, minute = target
-        slots = into.select { |_, t| t == target }.keys.map { |s| scope.where(SLOT.zip(s).to_h) }.reduce(:or)
-        dates = slots.distinct.pluck(:event_time_starts_at).map { |at| day_date(at) }.uniq.sort.last(MEETINGS_SHOWN)
-        next if dates.empty?
+      times = scope.group(:pco_event_time_id, *SLOT)
+                   .pluck(:pco_event_time_id, *SLOT, Arel.sql("MIN(event_time_starts_at)"),
+                          Arel.sql("MIN(event_time_shows_at)"), Arel.sql("MAX(event_time_name)"))
+                   .map { |id, e, w, h, m, starts, shows, name| ServiceTime.new(id, [e, w, h, m], starts, shows, name) }
+      into = joined_times(times)
 
-        attended = slots.where(person_id: @person.id).pluck(:event_time_starts_at).map { |at| day_date(at) }.to_set
-        label = scope.where(SLOT.zip(target).to_h).where.not(event_time_name: nil)
-                     .order(event_time_starts_at: :desc).pick(:event_time_name) || slot_label(wday, hour, minute)
+      rows_for = times.group_by { |t| into[t.id].slot }
+      rows_for.filter_map do |slot, members|
+        next unless members.any? { |t| mine.include?(t.id) }
+
+        dates = members.map { |t| day_date(t.starts_at) }.uniq.sort
+        next if dates.size < 2 # a one-off, like a musical
+
+        attended = members.select { |t| mine.include?(t.id) }.map { |t| day_date(t.starts_at) }.to_set
+        event_name, wday, hour, minute = slot
+        label = members.select { |t| t.slot == slot && t.name }.max_by(&:starts_at)&.name || slot_label(wday, hour, minute)
         Row.new(kind: "check_in", title: [event_name, label].compact.join(" · "), subtitle: nil,
-                meetings: dates.map { |d| { date: d, attended: attended.include?(d) } },
+                meetings: dates.last(MEETINGS_SHOWN).map { |d| { date: d, attended: attended.include?(d) } },
                 sort_key: [wday || 7, (hour || 0) * 60 + (minute || 0)])
       end
     end
 
-    # Each slot => the slot whose row it counts toward. A service time that
-    # starts less than JOIN_WITHIN before the next time of the same event on
-    # the same day counts toward that later one, and chains: jccag's
-    # check-in times 9:00 and 10:10 (during Sunday School) are all for the
-    # 11:00 service, and Sunday School's attendance is kept in Groups.
-    # 4 PM and 6 PM, two hours apart, stay separate. (A church setting
-    # for this is planned: 5ST-76.)
-    def joined_slots(slots)
+    ServiceTime = Struct.new(:id, :slot, :starts_at, :shows_at, :name)
+
+    # Each service time's id => the service time whose row it counts toward.
+    # A time that starts inside a later time's check-in window (same event,
+    # same day) counts toward the latest such time: jccag's 11:00 check-in
+    # opens at 8:30, so its 9:00 and 10:10 times (10:10 is during Sunday
+    # School, whose attendance is kept in Groups) count toward 11:00, while
+    # 4 PM stays apart from 6 PM (opens 5:30). Check-ins synced before the
+    # window was stored fall back to starting within JOIN_WITHIN of the
+    # next time. (A church setting for this is planned: 5ST-76.)
+    def joined_times(times)
       into = {}
-      slots.group_by { |e, w, _, _| [e, w] }.each_value do |day|
-        timed, untimed = day.partition { |_, w, h, _| w && h }
-        untimed.each { |s| into[s] = s }
-        later = nil
-        timed.sort_by { |s| minutes(s) }.reverse_each do |s|
-          into[s] = later && minutes(later) - minutes(s) < JOIN_WITHIN ? into[later] : s
-          later = s
+      times.group_by { |t| [t.slot.first, day_date(t.starts_at)] }.each_value do |day|
+        later = []
+        day.sort_by(&:starts_at).reverse_each do |t|
+          host = later.reverse.find { |u| u.starts_at > t.starts_at && covers?(u, t) }
+          into[t.id] = host ? into[host.id] : t
+          later.unshift(t)
         end
       end
       into
     end
 
-    def minutes(slot) = slot[2] * 60 + slot[3].to_i
+    def covers?(later, early)
+      return later.shows_at <= early.starts_at if later.shows_at
+
+      later.starts_at - early.starts_at < JOIN_WITHIN.minutes
+    end
 
     def group_rows
       memberships = @church.group_memberships.current.where(person_id: @person.id)

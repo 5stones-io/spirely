@@ -135,6 +135,7 @@ module Spirely
         one_time_guest: attrs["one_time_guest"] || false,
         pco_event_time_id:      event_time&.dig("id"),
         event_time_starts_at:   et_attrs["starts_at"],
+        event_time_shows_at:    et_attrs["shows_at"],
         event_time_name:        et_attrs["name"].presence,
         event_time_day_of_week: et_attrs["day_of_week"],
         event_time_hour:        et_attrs["hour"],
