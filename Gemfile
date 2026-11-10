@@ -33,5 +33,5 @@ group :development do
 end
 
 group :test do
-  gem "simplecov", "~> 0.22", require: false # 1.x needs Ruby > 3.3.0
+  gem "simplecov", "~> 1.3", require: false
 end
