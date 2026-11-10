@@ -17,6 +17,9 @@ module Spirely
   class AttendanceHistory
     MEETINGS_SHOWN = 10
     WINDOW         = 26.weeks
+    JOIN_WITHIN    = 60 # minutes; see #joined_slots
+
+    SLOT = %i[event_name event_time_day_of_week event_time_hour event_time_minute].freeze
 
     Row = Struct.new(:kind, :title, :subtitle, :meetings, :sort_key, keyword_init: true)
 
@@ -40,24 +43,46 @@ module Spirely
       names = kids_event_names
       scope = scope.where(event_name: names) if names.any?
       mine  = scope.where(person_id: @person.id)
-      slots = mine.distinct.pluck(:event_name, :event_time_day_of_week, :event_time_hour, :event_time_minute)
-      return [] if slots.empty?
+      my_slots = mine.distinct.pluck(*SLOT)
+      return [] if my_slots.empty?
 
-      attended = mine.distinct.pluck(:pco_event_time_id).to_set
-      slots.filter_map do |event_name, wday, hour, minute|
-        slot = scope.where(event_name: event_name, event_time_day_of_week: wday,
-                           event_time_hour: hour, event_time_minute: minute)
-        occurrences = slot.group(:pco_event_time_id).minimum(:event_time_starts_at)
-                          .sort_by { |_, at| at }.last(MEETINGS_SHOWN)
-        next if occurrences.empty?
+      into = joined_slots(scope.distinct.pluck(*SLOT))
+      my_slots.map { |s| into[s] }.uniq.filter_map do |target|
+        event_name, wday, hour, minute = target
+        slots = into.select { |_, t| t == target }.keys.map { |s| scope.where(SLOT.zip(s).to_h) }.reduce(:or)
+        dates = slots.distinct.pluck(:event_time_starts_at).map { |at| day_date(at) }.uniq.sort.last(MEETINGS_SHOWN)
+        next if dates.empty?
 
-        label = slot.where.not(event_time_name: nil).order(event_time_starts_at: :desc).pick(:event_time_name) ||
-                slot_label(wday, hour, minute)
+        attended = slots.where(person_id: @person.id).pluck(:event_time_starts_at).map { |at| day_date(at) }.to_set
+        label = scope.where(SLOT.zip(target).to_h).where.not(event_time_name: nil)
+                     .order(event_time_starts_at: :desc).pick(:event_time_name) || slot_label(wday, hour, minute)
         Row.new(kind: "check_in", title: [event_name, label].compact.join(" · "), subtitle: nil,
-                meetings: occurrences.map { |id, at| { date: day_date(at), attended: attended.include?(id) } },
+                meetings: dates.map { |d| { date: d, attended: attended.include?(d) } },
                 sort_key: [wday || 7, (hour || 0) * 60 + (minute || 0)])
       end
     end
+
+    # Each slot => the slot whose row it counts toward. A service time that
+    # starts less than JOIN_WITHIN before the next time of the same event on
+    # the same day counts toward that later one: jccag's check-in window
+    # opens at 10:10, during Sunday School, for the 11:00 service, and
+    # Sunday School's attendance is kept in Groups. (A church setting for
+    # this is planned; see Linear.)
+    def joined_slots(slots)
+      into = {}
+      slots.group_by { |e, w, _, _| [e, w] }.each_value do |day|
+        timed, untimed = day.partition { |_, w, h, _| w && h }
+        untimed.each { |s| into[s] = s }
+        later = nil
+        timed.sort_by { |s| minutes(s) }.reverse_each do |s|
+          into[s] = later && minutes(later) - minutes(s) < JOIN_WITHIN ? into[later] : s
+          later = s
+        end
+      end
+      into
+    end
+
+    def minutes(slot) = slot[2] * 60 + slot[3].to_i
 
     def group_rows
       memberships = @church.group_memberships.current.where(person_id: @person.id)
