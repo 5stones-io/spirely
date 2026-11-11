@@ -12,11 +12,22 @@ module Spirely
     # the family as is.
     class PhotoError < StandardError; end
 
+    # Praying for, or answering, a post that can't take it (5ST-79). The
+    # message is shown as is.
+    class PrayerError < StandardError; end
+
     belongs_to :church
     belongs_to :family,      class_name: "Spirely::Family"
     belongs_to :guardian,    class_name: "Spirely::Guardian", optional: true
     belongs_to :child,       class_name: "Spirely::Child", optional: true
     belongs_to :moderated_by, class_name: "::Membership", foreign_key: :moderated_by_membership_id, optional: true
+
+    # People praying for a prayer request (5ST-79).
+    has_many :prayers, class_name: "Spirely::FamilyPostPrayer", dependent: :delete_all
+    # A praise report can answer one of its family's prayer requests.
+    belongs_to :answers_post, class_name: "Spirely::FamilyPost", optional: true
+    has_one :answer_praise, class_name: "Spirely::FamilyPost", foreign_key: :answers_post_id,
+                            inverse_of: :answers_post, dependent: :nullify
 
     # Purged with the post (Active Storage's default).
     has_many_attached :photos
@@ -26,6 +37,7 @@ module Spirely
     validates :audience, inclusion: { in: AUDIENCES }
     validates :status, inclusion: { in: STATUSES }
     validate :child_belongs_to_family
+    validate :answers_own_prayer_request
 
     before_validation :default_post_type, on: :create
     before_validation :default_audience, on: :create
@@ -53,6 +65,44 @@ module Spirely
 
     def reject!(membership, reason: nil)
       update!(status: "rejected", moderated_by: membership, moderated_at: Time.current, rejected_reason: reason)
+    end
+
+    def prayer_request? = post_type == "prayer_request"
+    def answered? = answered_at.present?
+
+    def praying?(account) = prayers.exists?(account_id: account.id)
+
+    # Saying you're praying twice still counts once.
+    def pray!(account)
+      raise PrayerError, "You can only pray for prayer requests." unless prayer_request?
+      prayers.find_or_create_by!(account: account) { |p| p.church_id = church_id }
+    rescue ActiveRecord::RecordNotUnique
+      prayers.find_by!(account: account)
+    end
+
+    def stop_praying!(account)
+      prayers.where(account_id: account.id).first&.destroy!
+    end
+
+    # Marks this prayer request answered. With share_as_praise, the note
+    # also goes out as a praise report from the same family, about the
+    # same child, to the same audience, reviewed like any new post.
+    # Returns that praise report, or nil.
+    def mark_answered!(note:, share_as_praise: false, guardian: nil, photos: nil)
+      raise PrayerError, "Only prayer requests can be marked answered." unless prayer_request?
+      raise PrayerError, "This request is already marked answered." if answered?
+
+      transaction do
+        update!(answered_at: Time.current, answer_note: note.presence)
+        next nil unless share_as_praise
+
+        praise = self.class.create!(
+          church: church, family: family, guardian: guardian || self.guardian, child: child,
+          post_type: "praise_report", audience: audience, body: note.to_s.strip, answers_post: self,
+        )
+        praise.attach_photos(photos) if photos.present?
+        praise
+      end
     end
 
     # Checks every file before uploading any, so a bad one leaves nothing
@@ -103,6 +153,12 @@ module Spirely
     # family's own kid — nothing else stops a crafted request from
     # attributing a post to an unrelated family's child otherwise, since
     # Child isn't scoped through Family at the DB/FK level.
+    def answers_own_prayer_request
+      return unless answers_post
+      return if answers_post.prayer_request? && answers_post.family_id == family_id && post_type == "praise_report"
+      errors.add(:answers_post, "must be one of this family's prayer requests")
+    end
+
     def child_belongs_to_family
       return unless child && family
       errors.add(:child, "must belong to the posting family") unless child.family_id == family.id
