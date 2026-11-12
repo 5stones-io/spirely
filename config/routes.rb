@@ -37,7 +37,13 @@ Spirely::Engine.routes.draw do
 
       resource  :family,   only: [:show, :update]
       resources :children, only: [:index, :create, :update, :destroy]
-      resources :family_posts, only: [:index, :show, :create, :update, :destroy]
+      resources :family_posts, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          post   :prayer, action: :pray
+          delete :prayer, action: :stop_praying
+          post   :answer
+        end
+      end
       get "family_post_photos/:signed_id", to: "family_post_photos#show"
 
       resource  :sync_settings, only: [:show, :update]
@@ -146,6 +152,8 @@ Spirely::Engine.routes.draw do
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member
+          post   :prayer, on: :member, action: :pray
+          delete :prayer, on: :member, action: :stop_praying
         end
       end
 
