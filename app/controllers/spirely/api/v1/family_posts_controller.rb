@@ -11,7 +11,7 @@ module Spirely
 
         before_action :require_family!
         before_action :set_own_post, only: %i[update destroy answer]
-        before_action :set_visible_post, only: %i[show pray stop_praying]
+        before_action :set_visible_post, only: %i[show pray stop_praying remove_tags]
 
         # GET /api/v1/family_posts?post_type=praise_report
         # (several types: post_type=prayer_request,praise_report)
@@ -21,12 +21,10 @@ module Spirely
         # audience — a family should always be able to see their own
         # pending/rejected/staff_only posts, just not anyone else's.
         def index
-          scope = Current.church.family_posts
-                          .where("(status = ? AND audience = ?) OR family_id = ?",
-                                 "approved", "church", current_family.id)
+          scope = Current.church.family_posts.visible_to_family(current_family)
           scope = scope.where(post_type: params[:post_type].to_s.split(",")) if params[:post_type].present?
 
-          posts = scope.includes(:family, :guardian, :child, :answers_post, photos_attachments: :blob)
+          posts = scope.includes(:family, :guardian, :child, :answers_post, :tagged_children, { author: :account }, photos_attachments: :blob)
                         .order(created_at: :desc)
                         .page(params[:page]).per(25)
           @praying_ids = Spirely::FamilyPostPrayer.where(account_id: Current.account.id, family_post_id: posts.map(&:id))
@@ -127,6 +125,18 @@ module Spirely
           render json: { error: message, code: "validation_error" }, status: :unprocessable_entity
         end
 
+        # DELETE /api/v1/family_posts/:id/tags
+        #
+        # Takes this family's children off a staff post (5ST-78), so it
+        # leaves this family's feed.
+        def remove_tags
+          unless @family_post.staff_post?
+            return render json: { error: "Only staff posts have tags.", code: "not_tagged" }, status: :unprocessable_entity
+          end
+          @family_post.remove_tags!(current_family)
+          head :no_content
+        end
+
         # DELETE /api/v1/family_posts/:id
         def destroy
           @family_post.destroy!
@@ -142,10 +152,7 @@ module Spirely
         end
 
         def set_visible_post
-          @family_post = Current.church.family_posts
-                                 .where("(status = ? AND audience = ?) OR family_id = ?",
-                                        "approved", "church", current_family.id)
-                                 .find(params[:id])
+          @family_post = Current.church.family_posts.visible_to_family(current_family).find(params[:id])
         rescue ActiveRecord::RecordNotFound
           render json: { error: "Post not found", code: "not_found" }, status: :not_found
         end
@@ -173,7 +180,11 @@ module Spirely
             mine:        post.family_id == current_family.id,
             editable:    post.family_id == current_family.id && post.editable?,
             child:       post.child && { id: post.child.id, first_name: post.child.first_name },
-            author_name: post.guardian ? "#{post.guardian.first_name} #{post.guardian.last_name}".strip : post.family.primary_contact_name,
+            author_name: Spirely::FamilyPost.author_name(post),
+            # A staff post (5ST-78): only this family's own tagged children.
+            staff_post:  post.staff_post?,
+            tagged_children: post.tagged_children.select { |c| c.family_id == current_family.id }
+                                 .sort_by(&:first_name).map { |c| { id: c.id, first_name: c.first_name } },
             rejected_reason: post.rejected_reason,
             photos:      post_photos_json(post),
             prayer_count: post.prayers_count,

@@ -42,6 +42,7 @@ Spirely::Engine.routes.draw do
           post   :prayer, action: :pray
           delete :prayer, action: :stop_praying
           post   :answer
+          delete :tags, action: :remove_tags
         end
       end
       get "family_post_photos/:signed_id", to: "family_post_photos#show"
@@ -162,6 +163,9 @@ Spirely::Engine.routes.draw do
           post   :prayer, on: :member, action: :pray
           delete :prayer, on: :member, action: :stop_praying
         end
+        # Staff posts that tag children (5ST-78).
+        post  "tagged_posts",          to: "tagged_posts#create"
+        get   "tagged_posts/children", to: "tagged_posts#children"
         get   "feedback",     to: "feedback#index"
         get   "feedback/:id", to: "feedback#show"
         patch "feedback/:id", to: "feedback#update"

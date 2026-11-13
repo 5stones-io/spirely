@@ -1,7 +1,8 @@
 module Spirely
   class FamilyPost < ApplicationRecord
     POST_TYPES = %w[prayer_request praise_report milestone accomplishment other].freeze
-    AUDIENCES  = %w[church staff_only].freeze
+    # "tagged": a staff post only the tagged children's families see (5ST-78).
+    AUDIENCES  = %w[church staff_only tagged].freeze
     STATUSES   = %w[pending approved rejected].freeze
     MAX_PHOTOS = 10
     MAX_PHOTO_SIZE = 5.megabytes
@@ -16,8 +17,13 @@ module Spirely
     # message is shown as is.
     class PrayerError < StandardError; end
 
+    # A staff post's tags that break the rules (5ST-78). Shown as is.
+    class TagError < StandardError; end
+
     belongs_to :church
-    belongs_to :family,      class_name: "Spirely::Family"
+    # A staff post (5ST-78) has no posting family, only its author.
+    belongs_to :family,      class_name: "Spirely::Family", optional: true
+    belongs_to :author,      class_name: "::Membership", foreign_key: :author_membership_id, optional: true
     belongs_to :guardian,    class_name: "Spirely::Guardian", optional: true
     belongs_to :child,       class_name: "Spirely::Child", optional: true
     belongs_to :moderated_by, class_name: "::Membership", foreign_key: :moderated_by_membership_id, optional: true
@@ -29,10 +35,15 @@ module Spirely
     has_one :answer_praise, class_name: "Spirely::FamilyPost", foreign_key: :answers_post_id,
                             inverse_of: :answers_post, dependent: :nullify
 
+    # Children a staff post tags (5ST-78).
+    has_many :post_children, class_name: "Spirely::FamilyPostChild", dependent: :delete_all
+    has_many :tagged_children, through: :post_children, source: :child
+
     # Purged with the post (Active Storage's default).
     has_many_attached :photos
 
     validates :body, presence: true
+    validates :family, presence: true, unless: :author_membership_id?
     validates :post_type, inclusion: { in: POST_TYPES }
     validates :audience, inclusion: { in: AUDIENCES }
     validates :status, inclusion: { in: STATUSES }
@@ -50,6 +61,61 @@ module Spirely
     # this" definition, not "is this record moderated-clean."
     scope :visible_church_wide, -> { where(status: "approved", audience: "church") }
     scope :pending_moderation,  -> { where(status: "pending") }
+
+    # What a family's feed holds: the church-wide feed, the family's own
+    # posts, and staff posts that tag any of its children (5ST-78).
+    scope :visible_to_family, ->(family) {
+      where(<<~SQL.squish, approved: "approved", family_id: family.id)
+        (status = :approved AND audience = 'church')
+        OR family_id = :family_id
+        OR (status = :approved AND audience = 'tagged' AND id IN (
+          SELECT tags.family_post_id FROM spirely_family_post_children tags
+          JOIN spirely_children kids ON kids.id = tags.child_id
+          WHERE kids.family_id = :family_id))
+      SQL
+    }
+
+    def staff_post? = author_membership_id.present?
+
+    # Who wrote it: a staff post's author, or the posting guardian or family.
+    def self.author_name(post)
+      if post.staff_post? || post.family.nil?
+        post.author&.account&.then { |a| a.name || a.email } || "Church staff"
+      elsif post.guardian
+        "#{post.guardian.first_name} #{post.guardian.last_name}".strip
+      else
+        post.family.primary_contact_name
+      end
+    end
+
+    # A staff post to the families of the children it tags (5ST-78).
+    # Approved straight away (only staff post these). A post with photos
+    # can't tag a child whose family asked for no photos. Nothing is saved
+    # unless it all checks out.
+    def self.post_to_families!(church:, author:, body:, child_ids:, photos: nil)
+      ids = Array(child_ids).map(&:to_i).uniq
+      raise TagError, "Tag at least one child." if ids.empty?
+
+      children = church.children.where(id: ids).to_a
+      raise TagError, "Some of those children aren't at this church." if children.size != ids.size
+
+      if photos.present? && (no_photos = children.find(&:no_photos?))
+        raise TagError, "#{no_photos.first_name}'s family asked for no photos. Remove the photos or untag #{no_photos.first_name} to post."
+      end
+
+      transaction do
+        post = create!(church: church, author: author, body: body, post_type: "other", audience: "tagged", status: "approved")
+        children.each { |child| post.post_children.create!(church: church, child: child) }
+        post.attach_photos(photos) if photos.present?
+        post
+      end
+    end
+
+    # Takes this family's children off a staff post, so it leaves the
+    # family's feed (5ST-78). Other families' tags stay.
+    def remove_tags!(family)
+      post_children.where(child_id: family.children.select(:id)).delete_all
+    end
 
     def pending?  = status == "pending"
     def approved? = status == "approved"
