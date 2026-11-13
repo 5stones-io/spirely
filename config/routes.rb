@@ -46,6 +46,13 @@ Spirely::Engine.routes.draw do
       end
       get "family_post_photos/:signed_id", to: "family_post_photos#show"
 
+      # Feedback and requests (5ST-80): anyone at the church sends it and
+      # sees their own; attachments open only through signed links.
+      get  "feedback",               to: "feedback#index"
+      post "feedback",               to: "feedback#create"
+      get  "feedback/about_options", to: "feedback#about_options"
+      get  "feedback_attachments/:signed_id", to: "feedback_attachments#show"
+
       resource  :sync_settings, only: [:show, :update]
       post "/sync/trigger", to: "sync#trigger"
 
@@ -155,6 +162,9 @@ Spirely::Engine.routes.draw do
           post   :prayer, on: :member, action: :pray
           delete :prayer, on: :member, action: :stop_praying
         end
+        get   "feedback",     to: "feedback#index"
+        get   "feedback/:id", to: "feedback#show"
+        patch "feedback/:id", to: "feedback#update"
       end
 
       resources :invitations, only: [:show], param: :token do

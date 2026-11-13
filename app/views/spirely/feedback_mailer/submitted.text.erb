@@ -1,0 +1,9 @@
+<%= @feedback.sender_name %> sent <%= @church.name %> feedback.
+
+<%= [@feedback.category_label, @feedback.tone_label, @feedback.about.presence].compact.join(" · ") %>
+
+<%= @feedback.body %>
+<% if (count = @feedback.attachments_attachments.size).positive? %>
+<%= pluralize(count, "attachment") %>
+<% end %>
+Open it in the inbox: <%= @url %>

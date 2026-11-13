@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_11_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -248,6 +248,27 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_11_000001) do
     t.index ["church_id", "status"], name: "index_spirely_family_posts_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_family_posts_on_church_id"
     t.index ["family_id"], name: "index_spirely_family_posts_on_family_id"
+  end
+
+  create_table "spirely_feedbacks", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "account_id"
+    t.bigint "family_id"
+    t.bigint "task_id"
+    t.string "sender_role", null: false
+    t.string "category", null: false
+    t.string "tone"
+    t.string "about"
+    t.text "body", null: false
+    t.string "status", default: "new", null: false
+    t.text "staff_note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_spirely_feedbacks_on_account_id"
+    t.index ["church_id", "status", "created_at"], name: "index_spirely_feedbacks_on_church_id_and_status_and_created_at"
+    t.index ["church_id"], name: "index_spirely_feedbacks_on_church_id"
+    t.index ["family_id"], name: "index_spirely_feedbacks_on_family_id"
+    t.index ["task_id"], name: "index_spirely_feedbacks_on_task_id"
   end
 
   create_table "spirely_group_applications", force: :cascade do |t|
@@ -805,6 +826,10 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_11_000001) do
   add_foreign_key "spirely_family_posts", "spirely_families", column: "family_id"
   add_foreign_key "spirely_family_posts", "spirely_family_posts", column: "answers_post_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_guardians", column: "guardian_id", on_delete: :nullify
+  add_foreign_key "spirely_feedbacks", "accounts", on_delete: :nullify
+  add_foreign_key "spirely_feedbacks", "churches"
+  add_foreign_key "spirely_feedbacks", "spirely_families", column: "family_id", on_delete: :nullify
+  add_foreign_key "spirely_feedbacks", "spirely_tasks", column: "task_id", on_delete: :nullify
   add_foreign_key "spirely_group_applications", "churches"
   add_foreign_key "spirely_group_applications", "spirely_groups", column: "group_id"
   add_foreign_key "spirely_group_applications", "spirely_people", column: "person_id"
