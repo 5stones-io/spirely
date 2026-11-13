@@ -7,16 +7,21 @@ module Spirely
         # family-facing FamilyPostsController, which only ever shows a
         # given family its own posts plus the church-wide approved feed),
         # and can approve/reject/remove.
+        #
+        # Pastors-only posts are for pastors (5ST-79). Pastors who aren't
+        # admins can read and pray for approved prayer requests and praise
+        # reports here, and do nothing else.
         class FamilyPostsController < BaseController
           include Spirely::FamilyPostPhotosJson
           include Spirely::StaffFamilyPostJson
 
-          before_action :require_admin!
+          before_action :require_admin!, except: %i[index show pray stop_praying]
+          before_action :require_admin_or_pastor!, only: %i[index show pray stop_praying]
           before_action :set_post, only: %i[show destroy approve reject pray stop_praying]
 
           # GET /api/v1/admin/family_posts?status=pending&post_type=prayer_request
           def index
-            scope = Current.church.family_posts.includes(:family, :guardian, :child, :answers_post, { author: :account },
+            scope = staff_scope.includes(:family, :guardian, :child, :answers_post, { author: :account },
                                                          { tagged_children: :family }, photos_attachments: :blob)
             scope = scope.where(status: params[:status]) if params[:status].present?
             scope = scope.where(post_type: params[:post_type].to_s.split(",")) if params[:post_type].present?
@@ -84,8 +89,18 @@ module Spirely
 
           private
 
+          def require_admin_or_pastor!
+            return if admin? || Current.membership&.pastor?
+            render json: { error: "Forbidden", code: "forbidden" }, status: :forbidden
+          end
+
+          def staff_scope
+            scope = Current.church.family_posts.visible_to_staff(Current.membership)
+            admin? ? scope : scope.where(post_type: FamilyPost::PRAYER_TYPES, status: "approved")
+          end
+
           def set_post
-            @family_post = Current.church.family_posts.find(params[:id])
+            @family_post = staff_scope.find(params[:id])
           rescue ActiveRecord::RecordNotFound
             render json: { error: "Post not found", code: "not_found" }, status: :not_found
           end

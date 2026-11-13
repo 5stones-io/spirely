@@ -43,6 +43,9 @@ module Spirely
             # Can run the Kudos store desk (checkout and pickup): admins,
             # owners and Kudos helpers, when Kudos is on.
             store_desk: !!(Current.church.module_enabled?("kudos") && Current.membership&.store_desk?),
+            # Sees "Pastors only" prayer requests (5ST-79); a pastor who
+            # isn't an admin reaches the Prayer page from their home.
+            pastor: !!Current.membership&.pastor?,
           }
         end
 

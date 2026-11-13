@@ -2,7 +2,13 @@ module Spirely
   class FamilyPost < ApplicationRecord
     POST_TYPES = %w[prayer_request praise_report milestone accomplishment other].freeze
     # "tagged": a staff post only the tagged children's families see (5ST-78).
-    AUDIENCES  = %w[church staff_only tagged].freeze
+    # "pastors_only": a prayer request or praise report only the church's
+    # pastors (Membership#pastor) see (5ST-79).
+    AUDIENCES  = %w[church staff_only tagged pastors_only].freeze
+    PRAYER_TYPES = %w[prayer_request praise_report].freeze
+    # An unanswered prayer request leaves other families' pages this long
+    # after it was posted or last renewed (5ST-79).
+    PRAYER_LIFETIME = 30.days
     STATUSES   = %w[pending approved rejected].freeze
     MAX_PHOTOS = 10
     MAX_PHOTO_SIZE = 5.megabytes
@@ -49,10 +55,12 @@ module Spirely
     validates :status, inclusion: { in: STATUSES }
     validate :child_belongs_to_family
     validate :answers_own_prayer_request
+    validate :pastors_only_for_prayer
 
     before_validation :default_post_type, on: :create
     before_validation :default_audience, on: :create
     before_validation :default_status, on: :create
+    before_validation :review_pastors_only, on: :update
 
     # The church-wide feed: only approved posts whose author chose the
     # "church" audience. A post's own family (any status, either
@@ -65,14 +73,21 @@ module Spirely
     # What a family's feed holds: the church-wide feed, the family's own
     # posts, and staff posts that tag any of its children (5ST-78).
     scope :visible_to_family, ->(family) {
-      where(<<~SQL.squish, approved: "approved", family_id: family.id)
-        (status = :approved AND audience = 'church')
+      where(<<~SQL.squish, approved: "approved", family_id: family.id, cutoff: PRAYER_LIFETIME.ago)
+        (status = :approved AND audience = 'church' AND NOT (
+          post_type = 'prayer_request' AND answered_at IS NULL AND COALESCE(renewed_at, created_at) < :cutoff))
         OR family_id = :family_id
         OR (status = :approved AND audience = 'tagged' AND id IN (
           SELECT tags.family_post_id FROM spirely_family_post_children tags
           JOIN spirely_children kids ON kids.id = tags.child_id
           WHERE kids.family_id = :family_id))
       SQL
+    }
+
+    # What staff see: everything, except pastors-only posts for anyone who
+    # isn't a pastor (5ST-79).
+    scope :visible_to_staff, ->(membership) {
+      membership&.pastor? ? all : where.not(audience: "pastors_only")
     }
 
     def staff_post? = author_membership_id.present?
@@ -135,6 +150,22 @@ module Spirely
 
     def prayer_request? = post_type == "prayer_request"
     def answered? = answered_at.present?
+
+    # When an unanswered prayer request leaves other families' pages;
+    # nil for anything that doesn't expire.
+    def expires_at
+      return unless prayer_request? && !answered?
+      (renewed_at || created_at) + PRAYER_LIFETIME
+    end
+
+    def expired? = expires_at.present? && expires_at <= Time.current
+
+    # "Keep praying": shares the request for another PRAYER_LIFETIME.
+    def renew!
+      raise PrayerError, "Only prayer requests can be renewed." unless prayer_request?
+      raise PrayerError, "This request is already marked answered." if answered?
+      update!(renewed_at: Time.current)
+    end
 
     def praying?(account) = prayers.exists?(account_id: account.id)
 
@@ -211,8 +242,24 @@ module Spirely
     # explicitly turned it on (Church#family_posts_moderation_enabled) —
     # most churches get an auto-published feed by default, same "off
     # unless asked for" instinct as every other per-church toggle here.
+    # Pastors-only posts never wait for review: only pastors see them, and
+    # the review queue would show them to other admins.
     def default_status
-      self.status ||= church&.family_posts_moderation_enabled? ? "pending" : "approved"
+      self.status ||= audience == "pastors_only" || !church&.family_posts_moderation_enabled? ? "approved" : "pending"
+    end
+
+    # A post its family moves into or out of pastors only, before staff
+    # have reviewed it, gets the status a new post with that audience would.
+    # Otherwise "pastors only" would be a way around review.
+    def review_pastors_only
+      return unless audience_changed? && moderated_at.nil? && (audience == "pastors_only" || audience_was == "pastors_only")
+      self.status = nil
+      default_status
+    end
+
+    def pastors_only_for_prayer
+      return unless audience == "pastors_only" && !PRAYER_TYPES.include?(post_type)
+      errors.add(:audience, "can only be pastors only for prayer requests and praise reports")
     end
 
     # child_id is optional, but when present it has to actually be this

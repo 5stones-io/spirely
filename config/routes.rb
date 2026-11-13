@@ -42,6 +42,7 @@ Spirely::Engine.routes.draw do
           post   :prayer, action: :pray
           delete :prayer, action: :stop_praying
           post   :answer
+          post   :renew
           delete :tags, action: :remove_tags
         end
       end
