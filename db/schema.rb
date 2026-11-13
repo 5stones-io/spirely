@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_13_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_13_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -110,6 +110,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000002) do
     t.datetime "updated_at", null: false
     t.boolean "staff", default: false, null: false
     t.boolean "kudos_helper", default: false, null: false
+    t.boolean "pastor", default: false, null: false
     t.index ["account_id", "church_id"], name: "index_memberships_on_account_id_and_church_id", unique: true
     t.index ["church_id"], name: "index_memberships_on_church_id"
   end
@@ -257,6 +258,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000002) do
     t.text "answer_note"
     t.bigint "answers_post_id"
     t.bigint "author_membership_id"
+    t.datetime "renewed_at"
     t.index ["answers_post_id"], name: "index_spirely_family_posts_on_answers_post_id"
     t.index ["author_membership_id"], name: "index_spirely_family_posts_on_author_membership_id"
     t.index ["church_id", "audience", "status"], name: "idx_on_church_id_audience_status_b706e82226"
