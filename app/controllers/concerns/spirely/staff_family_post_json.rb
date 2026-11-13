@@ -26,6 +26,9 @@ module Spirely
         prayer_count: post.prayers_count,
         praying:     @praying_ids ? @praying_ids.include?(post.id) : post.praying?(Current.account),
         answered_at: post.answered_at,
+        # Off families' Prayer pages until renewed (5ST-79).
+        expires_at:  post.expires_at,
+        expired:     post.expired?,
         answer_note: post.answer_note,
         answers_post: post.answers_post && { id: post.answers_post.id, body: post.answers_post.body, created_at: post.answers_post.created_at },
         moderated_at: post.moderated_at,

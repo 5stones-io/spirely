@@ -10,7 +10,7 @@ module Spirely
         include Spirely::FamilyPostPhotosJson
 
         before_action :require_family!
-        before_action :set_own_post, only: %i[update destroy answer]
+        before_action :set_own_post, only: %i[update destroy answer renew]
         before_action :set_visible_post, only: %i[show pray stop_praying remove_tags]
 
         # GET /api/v1/family_posts?post_type=praise_report
@@ -125,6 +125,17 @@ module Spirely
           render json: { error: message, code: "validation_error" }, status: :unprocessable_entity
         end
 
+        # POST /api/v1/family_posts/:id/renew
+        #
+        # "Keep praying": the family's own prayer request goes back on other
+        # families' pages for another 30 days (5ST-79).
+        def renew
+          @family_post.renew!
+          render json: post_json(@family_post)
+        rescue FamilyPost::PrayerError => e
+          render json: { error: e.message, code: "validation_error" }, status: :unprocessable_entity
+        end
+
         # DELETE /api/v1/family_posts/:id/tags
         #
         # Takes this family's children off a staff post (5ST-78), so it
@@ -190,6 +201,9 @@ module Spirely
             prayer_count: post.prayers_count,
             praying:     @praying_ids ? @praying_ids.include?(post.id) : post.praying?(Current.account),
             answered_at: post.answered_at,
+            # Off other families' pages until renewed (5ST-79).
+            expires_at:  post.expires_at,
+            expired:     post.expired?,
             answer_note: post.answer_note,
             answers_post: post.answers_post && {
               id: post.answers_post.id, body: post.answers_post.body,
