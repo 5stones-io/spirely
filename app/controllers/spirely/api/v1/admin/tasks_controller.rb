@@ -30,14 +30,26 @@ module Spirely
           end
 
           # POST /api/v1/admin/tasks
+          #
+          # With task[feedback_id], the task is made from that feedback
+          # (5ST-80): it's linked to it, and new feedback moves to in progress.
           def create
+            feedback = nil
+            if (feedback_id = params.dig(:task, :feedback_id)).present?
+              feedback = Current.church.feedbacks.find_by(id: feedback_id)
+              return render json: { error: "Feedback not found", code: "not_found" }, status: :not_found unless feedback
+            end
+
             task = Current.church.tasks.new(task_params)
             task.created_by = Current.membership
             if task.time_category_id.nil?
               return render json: { error: "Pick a category for this task.", code: "validation_error" }, status: :unprocessable_entity
             end
 
-            task.save!
+            Spirely::Task.transaction do
+              task.save!
+              feedback&.update!(task: task, status: feedback.status == "new" ? "in_progress" : feedback.status)
+            end
 
             render json: task_json(task), status: :created
           rescue ActiveRecord::RecordInvalid => e

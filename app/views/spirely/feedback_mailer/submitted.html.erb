@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 16px; color: #2c1a0e;">
+  <p style="font-size: 17px; font-weight: 700;">
+    <%= @feedback.sender_name %> sent <%= @church.name %> feedback.
+  </p>
+  <p style="color: #8b6855;">
+    <%= @feedback.category_label %><% if @feedback.tone_label %> · <%= @feedback.tone_label %><% end %><% if @feedback.about.present? %> · <%= @feedback.about %><% end %>
+  </p>
+  <p style="white-space: pre-line;"><%= @feedback.body %></p>
+  <% if (count = @feedback.attachments_attachments.size).positive? %>
+    <p style="color: #8b6855;"><%= pluralize(count, "attachment") %></p>
+  <% end %>
+  <p>
+    <a href="<%= @url %>" style="display: inline-block; background: #00c2cb; color: #fff; padding: 10px 18px; border-radius: 999px; text-decoration: none; font-weight: 600;">Open in the inbox</a>
+  </p>
+</body>
+</html>
