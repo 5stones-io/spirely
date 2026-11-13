@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_13_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -163,6 +163,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
     t.datetime "ministry_interests_updated_at"
     t.bigint "ministry_interests_updated_by_id"
     t.string "ministry_interests_updated_by_role"
+    t.boolean "no_photos", default: false, null: false
     t.index ["church_id"], name: "index_spirely_children_on_church_id"
     t.index ["family_id"], name: "index_spirely_children_on_family_id"
     t.index ["ministry_interests_updated_by_id"], name: "index_spirely_children_on_ministry_interests_updated_by_id"
@@ -213,6 +214,18 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
     t.index ["pco_person_id"], name: "index_spirely_families_on_pco_person_id"
   end
 
+  create_table "spirely_family_post_children", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "family_post_id", null: false
+    t.bigint "child_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["child_id"], name: "index_spirely_family_post_children_on_child_id"
+    t.index ["church_id"], name: "index_spirely_family_post_children_on_church_id"
+    t.index ["family_post_id", "child_id"], name: "idx_on_family_post_id_child_id_d56afba8f7", unique: true
+    t.index ["family_post_id"], name: "index_spirely_family_post_children_on_family_post_id"
+  end
+
   create_table "spirely_family_post_prayers", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.bigint "family_post_id", null: false
@@ -227,7 +240,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
 
   create_table "spirely_family_posts", force: :cascade do |t|
     t.bigint "church_id", null: false
-    t.bigint "family_id", null: false
+    t.bigint "family_id"
     t.bigint "guardian_id"
     t.bigint "child_id"
     t.string "post_type", default: "prayer_request", null: false
@@ -243,7 +256,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
     t.datetime "answered_at"
     t.text "answer_note"
     t.bigint "answers_post_id"
+    t.bigint "author_membership_id"
     t.index ["answers_post_id"], name: "index_spirely_family_posts_on_answers_post_id"
+    t.index ["author_membership_id"], name: "index_spirely_family_posts_on_author_membership_id"
     t.index ["church_id", "audience", "status"], name: "idx_on_church_id_audience_status_b706e82226"
     t.index ["church_id", "status"], name: "index_spirely_family_posts_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_family_posts_on_church_id"
@@ -817,10 +832,14 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_13_000001) do
   add_foreign_key "spirely_church_integrations", "churches"
   add_foreign_key "spirely_families", "accounts", on_delete: :nullify
   add_foreign_key "spirely_families", "churches"
+  add_foreign_key "spirely_family_post_children", "churches"
+  add_foreign_key "spirely_family_post_children", "spirely_children", column: "child_id", on_delete: :cascade
+  add_foreign_key "spirely_family_post_children", "spirely_family_posts", column: "family_post_id", on_delete: :cascade
   add_foreign_key "spirely_family_post_prayers", "accounts", on_delete: :cascade
   add_foreign_key "spirely_family_post_prayers", "churches"
   add_foreign_key "spirely_family_post_prayers", "spirely_family_posts", column: "family_post_id", on_delete: :cascade
   add_foreign_key "spirely_family_posts", "churches"
+  add_foreign_key "spirely_family_posts", "memberships", column: "author_membership_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "memberships", column: "moderated_by_membership_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_children", column: "child_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_families", column: "family_id"

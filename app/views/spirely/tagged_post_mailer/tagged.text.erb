@@ -1,0 +1,9 @@
+<%= @author %> from <%= @church.name %> posted about <%= @names %>.
+
+<%= @post.body %>
+<% if (count = @post.photos_attachments.size).positive? %>
+<%= pluralize(count, "photo") %>
+<% end %>
+See it in your Family Feed: <%= @url %>
+
+Only your family and the church staff see this post.
