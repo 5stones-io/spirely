@@ -34,7 +34,7 @@ module Spirely
           # Children to tag, by first or last name.
           def children
             q = params[:q].to_s.strip
-            scope = Current.church.children.includes(:family).order(:first_name, :last_name)
+            scope = Current.church.children.includes(:family).order(:first_name, :last_name, :id)
             if q.present?
               like = "%#{ActiveRecord::Base.sanitize_sql_like(q)}%"
               scope = scope.where("first_name ILIKE :q OR last_name ILIKE :q OR (first_name || ' ' || last_name) ILIKE :q", q: like)
