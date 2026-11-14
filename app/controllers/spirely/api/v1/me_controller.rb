@@ -46,6 +46,10 @@ module Spirely
             # Sees "Pastors only" prayer requests (5ST-79); a pastor who
             # isn't an admin reaches the Prayer page from their home.
             pastor: !!Current.membership&.pastor?,
+            # Can post to families by tagging children (5ST-78): admins and
+            # members with the staff flag, when kids ministry is on. Staff
+            # who aren't admins reach "Post to families" from their home.
+            post_to_families: !!(Current.church.module_enabled?("kidsmin") && (admin? || Current.membership&.staff?)),
           }
         end
 

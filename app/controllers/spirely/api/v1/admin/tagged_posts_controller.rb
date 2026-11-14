@@ -12,6 +12,19 @@ module Spirely
           before_action { require_module!("kidsmin") }
           before_action :require_staff_poster!
 
+          # GET /api/v1/admin/tagged_posts
+          #
+          # The signed-in member's own posts to families, newest first: the
+          # "Post to families" page for staff who aren't admins (admins also
+          # see them in Family Posts).
+          def index
+            posts = Current.church.family_posts.where(author_membership_id: Current.membership&.id)
+              .includes(:answers_post, { author: :account }, { tagged_children: :family }, photos_attachments: :blob)
+              .order(created_at: :desc).page(params[:page]).per(50)
+            @praying_ids = Set.new
+            render json: { family_posts: posts.map { |p| post_json(p) }, meta: pagination_meta(posts) }
+          end
+
           # POST /api/v1/admin/tagged_posts
           #
           # tagged_post[body], tagged_post[child_ids][], and any

@@ -18,6 +18,25 @@ RSpec.describe "GET /api/v1/me", type: :request do
     expect(JSON.parse(response.body)["role"]).to eq("staff")
   end
 
+  # Staff who aren't admins reach the "Post to families" page from home.
+  it "says who can post to families: admins and staff-flag members, with kids ministry on" do
+    church = create(:church, enabled_modules: ["kidsmin"])
+    staff  = create(:account).tap { |a| create(:membership, church: church, account: a, staff: true) }
+    admin  = create(:account).tap { |a| create(:membership, :admin, church: church, account: a) }
+    member = create(:account).tap { |a| create(:membership, church: church, account: a) }
+    use_tenant_host!(church)
+
+    flags = [staff, admin, member].map do |a|
+      get "/api/v1/me", headers: auth_headers(a)
+      JSON.parse(response.body)["post_to_families"]
+    end
+    expect(flags).to eq([true, true, false])
+
+    church.update!(enabled_modules: [])
+    get "/api/v1/me", headers: auth_headers(staff)
+    expect(JSON.parse(response.body)["post_to_families"]).to be(false)
+  end
+
   it "resolves parent for a family membership with no admin access" do
     church  = create(:church)
     account = create(:account)

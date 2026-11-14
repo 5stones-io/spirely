@@ -165,6 +165,7 @@ Spirely::Engine.routes.draw do
           delete :prayer, on: :member, action: :stop_praying
         end
         # Staff posts that tag children (5ST-78).
+        get   "tagged_posts",          to: "tagged_posts#index"
         post  "tagged_posts",          to: "tagged_posts#create"
         get   "tagged_posts/children", to: "tagged_posts#children"
         get   "feedback",     to: "feedback#index"
