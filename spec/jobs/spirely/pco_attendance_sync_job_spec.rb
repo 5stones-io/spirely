@@ -201,12 +201,13 @@ RSpec.describe Spirely::PcoAttendanceSyncJob do
     expect(attendance.kind).to eq("volunteer")
   end
 
-  it "syncs checked_out_at, medical_notes, and location from a real-shaped response" do
+  it "syncs checked_out_at, medical_notes, the security code, and location from a real-shaped response" do
     check_in = {
       id: "checkin-full", type: "CheckIn",
       attributes: {
         created_at: "2026-08-01T14:03:00Z", checked_out_at: "2026-08-01T15:30:00Z",
         kind: "Regular", one_time_guest: false, medical_notes: "Peanut allergy",
+        security_code: "7KQX",
       },
       relationships: {
         person: { data: { id: "person-1", type: "Person" } },
@@ -234,6 +235,7 @@ RSpec.describe Spirely::PcoAttendanceSyncJob do
     attendance = church.attendances.find_by(pco_check_in_id: "checkin-full")
     expect(attendance).to have_attributes(
       medical_notes: "Peanut allergy",
+      security_code: "7KQX",
       pco_location_id: "loc-1",
       location_name: "Nursery"
     )
