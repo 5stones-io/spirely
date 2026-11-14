@@ -124,6 +124,9 @@ module Spirely
         checked_in_at:  attrs["created_at"],
         checked_out_at: attrs["checked_out_at"],
         medical_notes:  attrs["medical_notes"],
+        # Printed on the child's tag and the parent's pickup tag; staff
+        # match the two from Checked in now when a tag is lost.
+        security_code:  attrs["security_code"].presence,
         pco_location_id: pco_location_id,
         location:        location,
         location_name:   location&.name,
