@@ -5,7 +5,8 @@ module Spirely
     fields :public_id, :first_name, :last_name, :birthdate, :notes,
            :allergens, :allergy_notes, :allergy_updated_at,
            :ministry_interests, :ministry_interests_updated_at, :ministry_interests_updated_by_role,
-           :pco_last_synced_at, :created_at, :updated_at
+           :pco_last_synced_at, :created_at, :updated_at,
+           :no_photos # the family asked for no photos (5ST-78)
 
     field :grade
     field :grade_display

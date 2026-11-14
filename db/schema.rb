@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_13_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -110,6 +110,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
     t.datetime "updated_at", null: false
     t.boolean "staff", default: false, null: false
     t.boolean "kudos_helper", default: false, null: false
+    t.boolean "pastor", default: false, null: false
     t.index ["account_id", "church_id"], name: "index_memberships_on_account_id_and_church_id", unique: true
     t.index ["church_id"], name: "index_memberships_on_church_id"
   end
@@ -130,7 +131,15 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "location_id"
+    t.string "pco_event_time_id"
+    t.datetime "event_time_starts_at"
+    t.string "event_time_name"
+    t.integer "event_time_day_of_week"
+    t.integer "event_time_hour"
+    t.integer "event_time_minute"
+    t.datetime "event_time_shows_at"
     t.index ["church_id", "pco_check_in_id"], name: "index_spirely_attendances_on_church_id_and_pco_check_in_id", unique: true
+    t.index ["church_id", "pco_event_time_id"], name: "index_spirely_attendances_on_church_id_and_pco_event_time_id"
     t.index ["location_id"], name: "index_spirely_attendances_on_location_id"
     t.index ["person_id", "pco_event_id", "checked_in_at"], name: "index_attendances_on_person_event_checkin"
   end
@@ -155,6 +164,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
     t.datetime "ministry_interests_updated_at"
     t.bigint "ministry_interests_updated_by_id"
     t.string "ministry_interests_updated_by_role"
+    t.boolean "no_photos", default: false, null: false
     t.index ["church_id"], name: "index_spirely_children_on_church_id"
     t.index ["family_id"], name: "index_spirely_children_on_family_id"
     t.index ["ministry_interests_updated_by_id"], name: "index_spirely_children_on_ministry_interests_updated_by_id"
@@ -205,9 +215,33 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
     t.index ["pco_person_id"], name: "index_spirely_families_on_pco_person_id"
   end
 
+  create_table "spirely_family_post_children", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "family_post_id", null: false
+    t.bigint "child_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["child_id"], name: "index_spirely_family_post_children_on_child_id"
+    t.index ["church_id"], name: "index_spirely_family_post_children_on_church_id"
+    t.index ["family_post_id", "child_id"], name: "idx_on_family_post_id_child_id_d56afba8f7", unique: true
+    t.index ["family_post_id"], name: "index_spirely_family_post_children_on_family_post_id"
+  end
+
+  create_table "spirely_family_post_prayers", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "family_post_id", null: false
+    t.bigint "account_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_spirely_family_post_prayers_on_account_id"
+    t.index ["church_id"], name: "index_spirely_family_post_prayers_on_church_id"
+    t.index ["family_post_id", "account_id"], name: "idx_on_family_post_id_account_id_a82500116a", unique: true
+    t.index ["family_post_id"], name: "index_spirely_family_post_prayers_on_family_post_id"
+  end
+
   create_table "spirely_family_posts", force: :cascade do |t|
     t.bigint "church_id", null: false
-    t.bigint "family_id", null: false
+    t.bigint "family_id"
     t.bigint "guardian_id"
     t.bigint "child_id"
     t.string "post_type", default: "prayer_request", null: false
@@ -219,10 +253,39 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
     t.datetime "moderated_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "prayers_count", default: 0, null: false
+    t.datetime "answered_at"
+    t.text "answer_note"
+    t.bigint "answers_post_id"
+    t.bigint "author_membership_id"
+    t.datetime "renewed_at"
+    t.index ["answers_post_id"], name: "index_spirely_family_posts_on_answers_post_id"
+    t.index ["author_membership_id"], name: "index_spirely_family_posts_on_author_membership_id"
     t.index ["church_id", "audience", "status"], name: "idx_on_church_id_audience_status_b706e82226"
     t.index ["church_id", "status"], name: "index_spirely_family_posts_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_family_posts_on_church_id"
     t.index ["family_id"], name: "index_spirely_family_posts_on_family_id"
+  end
+
+  create_table "spirely_feedbacks", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.bigint "account_id"
+    t.bigint "family_id"
+    t.bigint "task_id"
+    t.string "sender_role", null: false
+    t.string "category", null: false
+    t.string "tone"
+    t.string "about"
+    t.text "body", null: false
+    t.string "status", default: "new", null: false
+    t.text "staff_note"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_spirely_feedbacks_on_account_id"
+    t.index ["church_id", "status", "created_at"], name: "index_spirely_feedbacks_on_church_id_and_status_and_created_at"
+    t.index ["church_id"], name: "index_spirely_feedbacks_on_church_id"
+    t.index ["family_id"], name: "index_spirely_feedbacks_on_family_id"
+    t.index ["task_id"], name: "index_spirely_feedbacks_on_task_id"
   end
 
   create_table "spirely_group_applications", force: :cascade do |t|
@@ -771,11 +834,23 @@ ActiveRecord::Schema[7.2].define(version: 2026_10_23_000002) do
   add_foreign_key "spirely_church_integrations", "churches"
   add_foreign_key "spirely_families", "accounts", on_delete: :nullify
   add_foreign_key "spirely_families", "churches"
+  add_foreign_key "spirely_family_post_children", "churches"
+  add_foreign_key "spirely_family_post_children", "spirely_children", column: "child_id", on_delete: :cascade
+  add_foreign_key "spirely_family_post_children", "spirely_family_posts", column: "family_post_id", on_delete: :cascade
+  add_foreign_key "spirely_family_post_prayers", "accounts", on_delete: :cascade
+  add_foreign_key "spirely_family_post_prayers", "churches"
+  add_foreign_key "spirely_family_post_prayers", "spirely_family_posts", column: "family_post_id", on_delete: :cascade
   add_foreign_key "spirely_family_posts", "churches"
+  add_foreign_key "spirely_family_posts", "memberships", column: "author_membership_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "memberships", column: "moderated_by_membership_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_children", column: "child_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_families", column: "family_id"
+  add_foreign_key "spirely_family_posts", "spirely_family_posts", column: "answers_post_id", on_delete: :nullify
   add_foreign_key "spirely_family_posts", "spirely_guardians", column: "guardian_id", on_delete: :nullify
+  add_foreign_key "spirely_feedbacks", "accounts", on_delete: :nullify
+  add_foreign_key "spirely_feedbacks", "churches"
+  add_foreign_key "spirely_feedbacks", "spirely_families", column: "family_id", on_delete: :nullify
+  add_foreign_key "spirely_feedbacks", "spirely_tasks", column: "task_id", on_delete: :nullify
   add_foreign_key "spirely_group_applications", "churches"
   add_foreign_key "spirely_group_applications", "spirely_groups", column: "group_id"
   add_foreign_key "spirely_group_applications", "spirely_people", column: "person_id"

@@ -1,6 +1,30 @@
 require "rails_helper"
 
 RSpec.describe Church do
+  describe "validations" do
+    it "requires a valid slug format" do
+      expect(build(:church, slug: "Invalid Slug!")).not_to be_valid
+      expect(build(:church, slug: "valid-slug-123")).to be_valid
+    end
+
+    it "requires a unique slug" do
+      create(:church, slug: "dupe")
+      expect(build(:church, slug: "dupe")).not_to be_valid
+    end
+  end
+
+  describe "#module_enabled?" do
+    it "returns false for a module not in enabled_modules" do
+      church = build(:church, enabled_modules: [])
+      expect(church.module_enabled?("kidsmin")).to be(false)
+    end
+
+    it "returns true once a module is enabled" do
+      church = build(:church, enabled_modules: ["kidsmin"])
+      expect(church.module_enabled?("kidsmin")).to be(true)
+    end
+  end
+
   describe "#brand_name" do
     it "returns display_name when set" do
       church = create(:church, name: "Legal Name Inc.", display_name: "Kids Nook")
@@ -63,6 +87,14 @@ RSpec.describe Church do
       church = build(:church, logo_shape: "hexagon")
       expect(church).not_to be_valid
       expect(church.errors[:logo_shape]).to be_present
+    end
+  end
+
+  describe "#primary_hostname" do
+    it "prefers a verified primary custom domain" do
+      church = create(:church, slug: "jcc")
+      create(:custom_domain, :verified, church: church, hostname: "kids.jcc.org", primary: true)
+      expect(church.primary_hostname).to eq("kids.jcc.org")
     end
   end
 end

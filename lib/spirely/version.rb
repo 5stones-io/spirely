@@ -1,3 +1,3 @@
 module Spirely
-  VERSION = "0.25.1"
+  VERSION = "0.36.0"
 end

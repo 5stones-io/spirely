@@ -37,7 +37,23 @@ Spirely::Engine.routes.draw do
 
       resource  :family,   only: [:show, :update]
       resources :children, only: [:index, :create, :update, :destroy]
-      resources :family_posts, only: [:index, :show, :create, :update, :destroy]
+      resources :family_posts, only: [:index, :show, :create, :update, :destroy] do
+        member do
+          post   :prayer, action: :pray
+          delete :prayer, action: :stop_praying
+          post   :answer
+          post   :renew
+          delete :tags, action: :remove_tags
+        end
+      end
+      get "family_post_photos/:signed_id", to: "family_post_photos#show"
+
+      # Feedback and requests (5ST-80): anyone at the church sends it and
+      # sees their own; attachments open only through signed links.
+      get  "feedback",               to: "feedback#index"
+      post "feedback",               to: "feedback#create"
+      get  "feedback/about_options", to: "feedback#about_options"
+      get  "feedback_attachments/:signed_id", to: "feedback_attachments#show"
 
       resource  :sync_settings, only: [:show, :update]
       post "/sync/trigger", to: "sync#trigger"
@@ -56,6 +72,11 @@ Spirely::Engine.routes.draw do
       post   "time_entries",                             to: "time_card#create"
       patch  "time_entries/:id",                         to: "time_card#update"
       delete "time_entries/:id",                         to: "time_card#destroy"
+      # Staff's own tasks: only those assigned to them (admins manage all
+      # through admin/tasks).
+      get    "my_tasks",                                 to: "my_tasks#index"
+      get    "my_tasks/:id",                             to: "my_tasks#show"
+      patch  "my_tasks/:id",                             to: "my_tasks#update"
       get    "my_points",                                to: "my_points#show"
       post   "my_points/claim",                          to: "my_points#claim"
       get    "my_points/store",                          to: "my_points#store"
@@ -140,7 +161,15 @@ Spirely::Engine.routes.draw do
         resources :family_posts, only: [:index, :show, :destroy] do
           post :approve, on: :member
           post :reject, on: :member
+          post   :prayer, on: :member, action: :pray
+          delete :prayer, on: :member, action: :stop_praying
         end
+        # Staff posts that tag children (5ST-78).
+        post  "tagged_posts",          to: "tagged_posts#create"
+        get   "tagged_posts/children", to: "tagged_posts#children"
+        get   "feedback",     to: "feedback#index"
+        get   "feedback/:id", to: "feedback#show"
+        patch "feedback/:id", to: "feedback#update"
       end
 
       resources :invitations, only: [:show], param: :token do

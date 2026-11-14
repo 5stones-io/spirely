@@ -57,6 +57,8 @@ module Spirely
         })
       end
 
+      Spirely::PcoAddress.push(client, pco_person_id, family.address)
+
       tag_name = church.sync_setting&.effective_ministry_tag
       if tag_name.present?
         all_tags = client.get_all("/people/v2/tags", "where[name]" => tag_name)

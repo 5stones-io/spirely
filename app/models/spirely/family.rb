@@ -122,7 +122,7 @@ module Spirely
 
     def profile_changed?
       previous_changes.keys.intersect?(%w[
-        family_name primary_contact_first_name primary_contact_last_name email phone
+        family_name primary_contact_first_name primary_contact_last_name email phone address
       ])
     end
 

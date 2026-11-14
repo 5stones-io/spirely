@@ -33,6 +33,26 @@ RSpec.describe "Family Posts API", type: :request do
       expect(ids).to contain_exactly(visible_from_other.id, own_pending.id, own_staff_only.id)
     end
 
+    it "marks the family's own posts, and which of them can still be edited" do
+      church  = create(:church, family_posts_moderation_enabled: true)
+      account = create(:account)
+      family  = create(:spirely_family, church: church, account: account)
+      admin   = create(:membership, :admin, church: church, account: create(:account))
+      pending  = create(:spirely_family_post, church: church, family: family, status: "pending")
+      reviewed = create(:spirely_family_post, church: church, family: family, status: "pending")
+      reviewed.approve!(admin)
+      auto     = create(:spirely_family_post, church: church, family: family, status: "approved")
+      others   = create(:spirely_family_post, church: church, status: "approved")
+
+      use_tenant_host!(church)
+      get "/api/v1/family_posts", headers: auth_headers(account)
+      posts = JSON.parse(response.body)["family_posts"].index_by { |p| p["id"] }
+      expect(posts[pending.id]).to include("mine" => true, "editable" => true)
+      expect(posts[reviewed.id]).to include("mine" => true, "editable" => false)
+      expect(posts[auto.id]).to include("mine" => true, "editable" => true)
+      expect(posts[others.id]).to include("mine" => false, "editable" => false)
+    end
+
     it "never shows another family's staff_only or unapproved posts" do
       church  = create(:church)
       account = create(:account)

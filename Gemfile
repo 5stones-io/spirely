@@ -31,3 +31,7 @@ end
 group :development do
   gem "rubocop-rails-omakase", require: false
 end
+
+group :test do
+  gem "simplecov", "~> 1.3", require: false
+end

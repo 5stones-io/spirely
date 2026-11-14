@@ -19,4 +19,7 @@ class Membership < ApplicationRecord
   # orders over or cancelling them): admins
   # and owners, and members marked as Kudos helpers.
   def store_desk? = kudos_helper? || admin_or_owner?
+
+  # The `pastor` column: sees "Pastors only" prayer requests (5ST-79).
+  # Only the flag counts; an admin who isn't a pastor doesn't see them.
 end

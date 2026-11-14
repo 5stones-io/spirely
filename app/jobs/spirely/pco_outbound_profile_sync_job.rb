@@ -18,6 +18,7 @@ module Spirely
           attributes: pco_attributes(family)
         }
       })
+      Spirely::PcoAddress.push(client, family.pco_person_id, family.address)
 
       family.update_column(:pco_last_synced_at, Time.current)
       Rails.logger.info("[Spirely] PcoOutboundProfileSyncJob complete for family #{family_id} (church #{church.id})")
@@ -36,7 +37,7 @@ module Spirely
         last_name:  family.primary_contact_last_name,
         contact_data: {
           email_addresses: [
-            { address: family.email, primary: true }
+            family.email.present? ? { address: family.email, primary: true } : nil
           ].compact,
           phone_numbers: [
             family.phone.present? ? { number: family.phone, primary: true } : nil

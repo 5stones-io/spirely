@@ -55,6 +55,7 @@ class Church < ApplicationRecord
   has_many :registration_statuses, class_name: "Spirely::RegistrationStatus", dependent: :destroy
   has_many :tasks, class_name: "Spirely::Task", dependent: :destroy
   has_many :family_posts, class_name: "Spirely::FamilyPost", dependent: :destroy
+  has_many :feedbacks, class_name: "Spirely::Feedback", dependent: :destroy
   has_many :group_types, class_name: "Spirely::GroupType", dependent: :destroy
   has_many :groups, class_name: "Spirely::Group", dependent: :destroy
   has_many :group_memberships, class_name: "Spirely::GroupMembership", dependent: :destroy

@@ -29,4 +29,11 @@ Rails.application.configure do
   config.active_record.dump_schema_after_migration = false
 
   config.active_storage.service = :test
+
+  # Jobs are queued, not run in background threads (:async, the app's
+  # default outside production): a job still running in its own thread
+  # after a spec ends shares that spec's database connection and can
+  # hang the whole run. Specs that run a job call perform_now or
+  # perform_enqueued_jobs.
+  config.active_job.queue_adapter = :test
 end
