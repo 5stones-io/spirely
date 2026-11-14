@@ -5,12 +5,13 @@ module Spirely
         # Staff side of the Kudos store (5ST-63): the catalog, the pickup
         # queue, and checkout at a table. Admins only, except that Kudos
         # helpers can run the store desk: read the catalog, see the pickup
-        # queue (waiting orders only), hand orders over, and check out.
+        # queue (waiting orders only), hand orders over or cancel them, and
+        # check out.
         class KudosStoreController < BaseController
           include Spirely::KudosJson
 
           before_action -> { require_module!("kudos") }
-          STORE_DESK = %i[items orders fulfill checkout].freeze
+          STORE_DESK = %i[items orders fulfill cancel checkout].freeze
           before_action :require_admin!, except: STORE_DESK
           before_action :require_store_desk!, only: STORE_DESK
 

@@ -58,7 +58,8 @@ module Spirely
             csv = CSV.generate do |rows|
               rows << ["Date", "Name", "Email", "Category code", "Category", "Task", "Title", "Description", "Hours"]
               entries.sort_by { |e| [e.worked_on, person_name(e.membership)] }.each do |e|
-                rows << [e.worked_on.iso8601, person_name(e.membership), e.membership.account.email, e.time_category.code,
+                # Name is blank rather than a repeat of the email when there's no name to give.
+                rows << [e.worked_on.iso8601, real_name(e.membership), e.membership.account.email, e.time_category.code,
                          e.time_category.name, e.task&.title, e.title, e.description, e.hours.to_f]
               end
             end

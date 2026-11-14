@@ -98,6 +98,27 @@ RSpec.describe "Time card", type: :request do
       expect(rows[1]).to include("2026-10-27", "Sam Ortiz", "FAC", "Facilities", "Gym door", "1.5")
     end
 
+    it "names someone without an account name from Planning Center, or leaves the CSV name blank" do
+      lee = create(:account, email: "Lee@example.com", first_name: nil, last_name: nil)
+      lee_member = create(:membership, church: church, account: lee, staff: true)
+      church.time_entries.create!(membership: lee_member, time_category: facilities, title: "Mowing", hours: 2, worked_on: Date.new(2026, 10, 27))
+      create(:spirely_person, church: church, first_name: "Lee", last_name: "Smith", email: "lee@example.com")
+      ana = create(:account, email: "family@example.com", first_name: nil, last_name: nil)
+      ana_member = create(:membership, church: church, account: ana, staff: true)
+      church.time_entries.create!(membership: ana_member, time_category: facilities, title: "Painting", hours: 1, worked_on: Date.new(2026, 10, 27))
+      # two people share this email, so neither name is used
+      create(:spirely_person, church: church, first_name: "Ana", last_name: "Diaz", email: "family@example.com")
+      create(:spirely_person, church: church, first_name: "Luis", last_name: "Diaz", email: "family@example.com")
+
+      get "/api/v1/admin/time_entries", headers: auth_headers(admin)
+      expect(json["people_totals"].map { |p| p["name"] }).to include("Lee Smith", "family@example.com")
+
+      get "/api/v1/admin/time_entries.csv", params: { from: "2026-10-26", to: "2026-11-01" }, headers: auth_headers(admin)
+      rows = CSV.parse(response.body).drop(1)
+      expect(rows.find { |r| r[6] == "Mowing" }[1..2]).to eq(["Lee Smith", lee.email])
+      expect(rows.find { |r| r[6] == "Painting" }[1..2]).to eq([nil, "family@example.com"])
+    end
+
     it "manages categories, turned off rather than deleted" do
       post "/api/v1/admin/time_categories", params: { code: "ofc", name: "Office" }, headers: auth_headers(admin), as: :json
       expect(json).to include("code" => "OFC", "active" => true)
