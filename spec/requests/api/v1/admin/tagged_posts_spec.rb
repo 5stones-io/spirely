@@ -87,8 +87,37 @@ RSpec.describe "Admin tagged posts API", type: :request do
       get "/api/v1/admin/tagged_posts/children?q=em", headers: auth_headers(admin)
 
       expect(json["children"]).to eq([
-        { "id" => emma.id, "full_name" => "Emma Singleton", "first_name" => "Emma", "family_name" => "Singleton", "no_photos" => true },
+        {
+          "id" => emma.id, "full_name" => "Emma Singleton", "first_name" => "Emma", "family_name" => "Singleton",
+          "no_photos" => true, "age" => 8, "grade" => emma.grade_display, "parents" => [], "possible_duplicate" => false,
+        },
       ])
+    end
+
+    # The same name can belong to different children, or to one child
+    # entered twice in Planning Center. Age, grade and parents tell them
+    # apart; the same name and birthday marks a likely duplicate.
+    it "gives staff what they need to tell children with the same name apart" do
+      emma.update!(birthdate: Date.new(2014, 4, 1), grade: 3)
+      create(:spirely_guardian, family: emma_family, first_name: "Clive")
+      create(:spirely_guardian, family: emma_family, first_name: "Ann")
+      second_record = create(:spirely_child, family: create(:spirely_family, church: church, family_name: "Singleton"),
+                                             first_name: "emma", last_name: "SINGLETON", birthdate: Date.new(2014, 4, 1), grade: 6)
+      other_emma  = create(:spirely_child, family: noah_family, first_name: "Emma", last_name: "Singleton", birthdate: Date.new(2007, 7, 30))
+      no_birthday = create(:spirely_child, family: noah_family, first_name: "Emma", last_name: "Singleton", birthdate: nil)
+      # Another church's child with the same name and birthday doesn't count.
+      create(:spirely_child, family: create(:spirely_family), first_name: "Emma", last_name: "Singleton", birthdate: Date.new(2007, 7, 30))
+
+      travel_to(Date.new(2026, 11, 14)) do
+        get "/api/v1/admin/tagged_posts/children", params: { q: "emma singleton" }, headers: auth_headers(admin)
+      end
+
+      by_id = json["children"].index_by { |c| c["id"] }
+      expect(by_id.keys).to contain_exactly(emma.id, second_record.id, other_emma.id, no_birthday.id)
+      expect(by_id[emma.id]).to include("age" => 12, "grade" => "3rd", "parents" => %w[Ann Clive], "possible_duplicate" => true)
+      expect(by_id[second_record.id]).to include("grade" => "6th", "possible_duplicate" => true)
+      expect(by_id[other_emma.id]).to include("age" => 19, "possible_duplicate" => false)
+      expect(by_id[no_birthday.id]).to include("age" => nil, "possible_duplicate" => false)
     end
   end
 

@@ -31,22 +31,47 @@ module Spirely
 
           # GET /api/v1/admin/tagged_posts/children?q=em
           #
-          # Children to tag, by first or last name.
+          # Children to tag, by first or last name. Different children can
+          # share a name, and Planning Center can hold one child twice, so
+          # each comes with age, grade and parents, and possible_duplicate
+          # when another child here has the same name and birthday.
           def children
             q = params[:q].to_s.strip
-            scope = Current.church.children.includes(:family).order(:first_name, :last_name, :id)
+            scope = Current.church.children.includes(family: :guardians).order(:first_name, :last_name, :id)
             if q.present?
               like = "%#{ActiveRecord::Base.sanitize_sql_like(q)}%"
               scope = scope.where("first_name ILIKE :q OR last_name ILIKE :q OR (first_name || ' ' || last_name) ILIKE :q", q: like)
             end
+            kids = scope.limit(20).to_a
+            duplicates = duplicate_ids(kids)
             render json: {
-              children: scope.limit(20).map { |c|
-                { id: c.id, full_name: c.full_name, first_name: c.first_name, family_name: c.family.family_name, no_photos: c.no_photos }
+              children: kids.map { |c|
+                {
+                  id: c.id, full_name: c.full_name, first_name: c.first_name, family_name: c.family.family_name,
+                  no_photos: c.no_photos, age: c.age, grade: c.grade_display,
+                  parents: c.family.guardians.map(&:first_name).sort,
+                  possible_duplicate: duplicates.include?(c.id),
+                }
               },
             }
           end
 
           private
+
+          # Of these children, the ones sharing a name (ignoring case) and a
+          # birthday with another child at this church.
+          def duplicate_ids(kids)
+            dated = kids.select(&:birthdate)
+            return Set.new if dated.empty?
+
+            key = ->(first, last, born) { [first.to_s.strip.downcase, last.to_s.strip.downcase, born] }
+            counts = Current.church.children
+              .where(birthdate: dated.map(&:birthdate).uniq)
+              .where("LOWER(TRIM(first_name)) IN (?)", dated.map { |c| c.first_name.to_s.strip.downcase }.uniq)
+              .pluck(:first_name, :last_name, :birthdate)
+              .map { |row| key.(*row) }.tally
+            dated.select { |c| counts.fetch(key.(c.first_name, c.last_name, c.birthdate), 0) > 1 }.map(&:id).to_set
+          end
 
           def require_staff_poster!
             return if admin? || Current.membership&.staff?
