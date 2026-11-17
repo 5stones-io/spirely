@@ -189,5 +189,22 @@ RSpec.describe "Feature switches", type: :request do
       expect(json["time_card"]).to be(false)
       expect(json["post_to_families"]).to be(false)
     end
+
+    # The mobile app shows staff tiles (Tasks, New families, Birthdays) on
+    # this, so it mustn't go away with the time card (5ST-82).
+    it "still says who's staff with the time card off" do
+      staff = create(:account)
+      create(:membership, church: church, account: staff, role: "family", staff: true)
+      turn_off("time_card")
+
+      get "/api/v1/me", headers: auth_headers(admin)
+      expect(json).to include("time_card" => false, "staff_member" => true)
+
+      get "/api/v1/me", headers: auth_headers(staff)
+      expect(json["staff_member"]).to be(true)
+
+      get "/api/v1/me", headers: auth_headers(parent)
+      expect(json["staff_member"]).to be(false)
+    end
   end
 end
