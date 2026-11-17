@@ -7,6 +7,7 @@ module Spirely
         class TimeCategoriesController < BaseController
           include Spirely::TimeCardJson
 
+          before_action { require_feature!("time_card") }
           before_action :require_admin!
 
           # GET /api/v1/admin/time_categories

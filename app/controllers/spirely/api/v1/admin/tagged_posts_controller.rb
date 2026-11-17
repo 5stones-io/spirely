@@ -10,6 +10,7 @@ module Spirely
           include Spirely::StaffFamilyPostJson
 
           before_action { require_module!("kidsmin") }
+          before_action { require_feature!("family_posts") }
           before_action :require_staff_poster!
 
           # GET /api/v1/admin/tagged_posts

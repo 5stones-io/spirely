@@ -9,6 +9,21 @@ class Church < ApplicationRecord
     "kudos"       => { label: "Kudos" },
   }.freeze
   KNOWN_MODULES = MODULES.keys.freeze
+  # Core features a church can turn off (Church#disabled_features, 5ST-81).
+  # Unlike modules they start on. A feature that's off is hidden from
+  # everyone: its endpoints answer 404 (BaseController#require_feature!)
+  # and its background work stops. `module:` marks a feature that only
+  # exists inside a ministry module (Settings lists it only when that
+  # module is on); `requires:` one that can't be on without another.
+  FEATURES = {
+    "volunteers"   => { label: "Volunteers",      description: "Volunteer pipeline and onboarding steps.", module: "kidsmin" },
+    "tasks"        => { label: "Tasks",           description: "To-dos for staff, with assignees and due dates." },
+    "time_card"    => { label: "Time card",       description: "Staff hours toward category codes." },
+    "family_posts" => { label: "Family posts",    description: "Families share photos and updates with staff." },
+    "prayer"       => { label: "Prayer requests", description: "Prayer requests and praise reports.", requires: "family_posts" },
+    "feedback"     => { label: "Feedback",        description: "Feedback and requests from families and volunteers." },
+    "events"       => { label: "Events",          description: "Upcoming events from Planning Center Calendar." },
+  }.freeze
   # Modules that use the shared Planning Center Groups data (Spirely::Group
   # & co). Kids Ministry doesn't need its own entry: on a kids-only domain
   # it gets Small Groups limited to children's groups (#children_groups_only?).
@@ -105,6 +120,7 @@ class Church < ApplicationRecord
   validates :status, inclusion: { in: STATUSES }
   validates :public_site_theme, inclusion: { in: PUBLIC_SITE_THEMES }
   validates :logo_shape, inclusion: { in: LOGO_SHAPES }
+  validate :disabled_features_known
 
   # The modules this request can use: everything the church has on,
   # narrowed to the custom domain's own list when the request came in on a
@@ -125,6 +141,19 @@ class Church < ApplicationRecord
 
   def module_enabled?(name)
     active_modules.include?(name.to_s)
+  end
+
+  # Whether a core feature is on (5ST-81). Raises on a name that isn't in
+  # FEATURES, so a typo in a gate fails loudly instead of hiding a feature.
+  def feature_enabled?(name)
+    feature = FEATURES.fetch(name.to_s) { raise ArgumentError, "unknown feature: #{name}" }
+    return false if disabled_features.include?(name.to_s)
+
+    feature[:requires].nil? || feature_enabled?(feature[:requires])
+  end
+
+  def enabled_features
+    FEATURES.keys.select { |name| feature_enabled?(name) }
   end
 
   # True when any module that uses Planning Center Groups is on — gates
@@ -243,5 +272,10 @@ class Church < ApplicationRecord
 
     errors.add(:logo, "must be smaller than #{MAX_LOGO_SIZE / 1.megabyte}MB") if logo.blob.byte_size > MAX_LOGO_SIZE
     errors.add(:logo, "must be a PNG, JPEG, SVG, or WebP image") unless ALLOWED_LOGO_TYPES.include?(logo.blob.content_type)
+  end
+
+  def disabled_features_known
+    unknown = Array(disabled_features) - FEATURES.keys
+    errors.add(:disabled_features, "include unknown features: #{unknown.join(', ')}") if unknown.any?
   end
 end

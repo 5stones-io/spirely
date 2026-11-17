@@ -13,7 +13,8 @@ module Spirely
         # GET /api/v1/family_post_photos/:signed_id
         def show
           blob = ActiveStorage::Blob.find_signed(params[:signed_id], purpose: "family_post_photo")
-          return render_not_found unless blob&.attachments&.any? { |a| a.record_type == "Spirely::FamilyPost" }
+          attachment = blob&.attachments&.find { |a| a.record_type == "Spirely::FamilyPost" }
+          return render_not_found unless attachment&.record&.church&.feature_enabled?("family_posts")
 
           redirect_to blob.url(expires_in: 5.minutes, disposition: "inline"), allow_other_host: true
         end

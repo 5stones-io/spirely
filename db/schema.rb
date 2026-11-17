@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_14_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_17_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -84,6 +84,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_14_000001) do
     t.string "display_name"
     t.string "logo_shape", default: "circle", null: false
     t.boolean "family_posts_moderation_enabled", default: false, null: false
+    t.string "disabled_features", default: [], null: false, array: true
     t.index ["slug"], name: "index_churches_on_slug", unique: true
   end
 
