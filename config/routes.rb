@@ -101,6 +101,8 @@ Spirely::Engine.routes.draw do
           delete :logo, on: :collection, action: :remove_logo
         end
         resource  :pco_status, only: [:show], controller: "pco_status"
+        # Settings → Features: core features a church can turn off (5ST-81).
+        resource  :features, only: [:show, :update], controller: "features"
         resource  :twilio_verification, only: [:create], controller: "twilio_verification" do
           post :confirm, on: :collection
         end

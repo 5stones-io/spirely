@@ -15,6 +15,8 @@ module Spirely
           include Spirely::FamilyPostPhotosJson
           include Spirely::StaffFamilyPostJson
 
+          before_action { require_feature!("family_posts") }
+          before_action(only: %i[pray stop_praying]) { require_feature!("prayer") }
           before_action :require_admin!, except: %i[index show pray stop_praying]
           before_action :require_admin_or_pastor!, only: %i[index show pray stop_praying]
           before_action :set_post, only: %i[show destroy approve reject pray stop_praying]
@@ -95,7 +97,7 @@ module Spirely
           end
 
           def staff_scope
-            scope = Current.church.family_posts.visible_to_staff(Current.membership)
+            scope = Current.church.family_posts.visible_to_staff(Current.membership).allowed_types_for(Current.church)
             admin? ? scope : scope.where(post_type: FamilyPost::PRAYER_TYPES, status: "approved")
           end
 

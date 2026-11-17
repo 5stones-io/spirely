@@ -7,6 +7,7 @@ module Spirely
         class TasksController < BaseController
           include Spirely::TaskEndpoints
 
+          before_action { require_feature!("tasks") }
           before_action :require_admin!
           before_action :set_task, only: %i[show update destroy]
 

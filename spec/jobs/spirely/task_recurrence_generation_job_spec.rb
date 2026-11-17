@@ -35,4 +35,12 @@ RSpec.describe Spirely::TaskRecurrenceGenerationJob, type: :job do
 
     expect { described_class.new.perform }.not_to change(Spirely::Task, :count)
   end
+
+  it "leaves a church's tasks alone while Tasks is turned off" do
+    church = create(:church, disabled_features: ["tasks"])
+    create(:spirely_task, church: church, recurrence_rule: "monthly", recurrence_mode: "absolute",
+                          due_date: 1.day.ago.to_date)
+
+    expect { described_class.new.perform }.not_to change(Spirely::Task, :count)
+  end
 end

@@ -31,6 +31,9 @@ module Spirely
             # narrowed to this domain's own modules on a module-scoped
             # domain — the frontend gates navigation and screens on this.
             enabled_modules: Current.church.active_modules,
+            # Core features this church has on (Church::FEATURES, 5ST-81);
+            # the frontend hides the rest.
+            enabled_features: Current.church.enabled_features,
             # Every role this account holds here, not just the single
             # highest-priority `role` above — e.g. an admin who's also a
             # parent gets ["staff", "parent"]. `role` still decides the
@@ -39,17 +42,18 @@ module Spirely
             capabilities: capabilities,
             # Can use the time card: admins, owners and members marked as
             # staff — lets a non-admin staff member's home link to it.
-            time_card: !!Current.membership&.time_card?,
+            time_card: !!(Current.church.feature_enabled?("time_card") && Current.membership&.time_card?),
             # Can run the Kudos store desk (checkout and pickup): admins,
             # owners and Kudos helpers, when Kudos is on.
             store_desk: !!(Current.church.module_enabled?("kudos") && Current.membership&.store_desk?),
             # Sees "Pastors only" prayer requests (5ST-79); a pastor who
             # isn't an admin reaches the Prayer page from their home.
-            pastor: !!Current.membership&.pastor?,
+            pastor: !!(Current.church.feature_enabled?("prayer") && Current.membership&.pastor?),
             # Can post to families by tagging children (5ST-78): admins and
             # members with the staff flag, when kids ministry is on. Staff
             # who aren't admins reach "Post to families" from their home.
-            post_to_families: !!(Current.church.module_enabled?("kidsmin") && (admin? || Current.membership&.staff?)),
+            post_to_families: !!(Current.church.module_enabled?("kidsmin") && Current.church.feature_enabled?("family_posts") &&
+                                 (admin? || Current.membership&.staff?)),
           }
         end
 

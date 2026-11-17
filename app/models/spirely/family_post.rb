@@ -56,6 +56,7 @@ module Spirely
     validate :child_belongs_to_family
     validate :answers_own_prayer_request
     validate :pastors_only_for_prayer
+    validate :prayer_feature_on
 
     before_validation :default_post_type, on: :create
     before_validation :default_audience, on: :create
@@ -88,6 +89,12 @@ module Spirely
     # isn't a pastor (5ST-79).
     scope :visible_to_staff, ->(membership) {
       membership&.pastor? ? all : where.not(audience: "pastors_only")
+    }
+
+    # Leaves prayer requests and praise reports out while the church has
+    # Prayer requests turned off (Church::FEATURES, 5ST-81).
+    scope :allowed_types_for, ->(church) {
+      church.feature_enabled?("prayer") ? all : where.not(post_type: PRAYER_TYPES)
     }
 
     def staff_post? = author_membership_id.present?
@@ -230,8 +237,9 @@ module Spirely
 
     private
 
+    # A prayer request, unless the church has Prayer requests turned off.
     def default_post_type
-      self.post_type ||= POST_TYPES.first
+      self.post_type ||= church.nil? || church.feature_enabled?("prayer") ? POST_TYPES.first : "other"
     end
 
     def default_audience
@@ -255,6 +263,15 @@ module Spirely
       return unless audience_changed? && moderated_at.nil? && (audience == "pastors_only" || audience_was == "pastors_only")
       self.status = nil
       default_status
+    end
+
+    # New prayer requests and praise reports wait until the church turns
+    # Prayer requests back on (5ST-81). Existing ones keep, untouched.
+    def prayer_feature_on
+      return unless PRAYER_TYPES.include?(post_type) && (new_record? || will_save_change_to_post_type?)
+      return if church.nil? || church.feature_enabled?("prayer")
+
+      errors.add(:base, "Prayer requests and praise reports are turned off.")
     end
 
     def pastors_only_for_prayer

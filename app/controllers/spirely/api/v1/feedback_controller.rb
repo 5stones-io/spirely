@@ -8,6 +8,7 @@ module Spirely
       class FeedbackController < BaseController
         include Spirely::FeedbackJson
 
+        before_action { require_feature!("feedback") }
         before_action :require_member!
 
         # GET /api/v1/feedback

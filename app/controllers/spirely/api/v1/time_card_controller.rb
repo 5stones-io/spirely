@@ -8,6 +8,7 @@ module Spirely
       class TimeCardController < BaseController
         include Spirely::TimeCardJson
 
+        before_action { require_feature!("time_card") }
         before_action :require_time_card!
 
         TASK_RECENCY = 30.days

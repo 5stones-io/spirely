@@ -25,6 +25,33 @@ RSpec.describe Church do
     end
   end
 
+  describe "feature switches (5ST-81)" do
+    it "has every feature on by default" do
+      church = build(:church)
+      expect(church.enabled_features).to eq(Church::FEATURES.keys)
+      expect(church.feature_enabled?("tasks")).to be(true)
+    end
+
+    it "turns off what's in disabled_features" do
+      church = build(:church, disabled_features: ["tasks"])
+      expect(church.feature_enabled?("tasks")).to be(false)
+      expect(church.enabled_features).not_to include("tasks")
+    end
+
+    it "turns prayer off along with family posts" do
+      church = build(:church, disabled_features: ["family_posts"])
+      expect(church.feature_enabled?("prayer")).to be(false)
+    end
+
+    it "rejects features it doesn't know" do
+      expect(build(:church, disabled_features: ["teleporter"])).not_to be_valid
+    end
+
+    it "raises on a feature name that isn't registered, so a typo can't hide a feature" do
+      expect { build(:church).feature_enabled?("taks") }.to raise_error(ArgumentError)
+    end
+  end
+
   describe "#brand_name" do
     it "returns display_name when set" do
       church = create(:church, name: "Legal Name Inc.", display_name: "Kids Nook")

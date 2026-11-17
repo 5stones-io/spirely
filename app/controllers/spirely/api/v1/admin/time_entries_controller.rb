@@ -9,6 +9,7 @@ module Spirely
         class TimeEntriesController < BaseController
           include Spirely::TimeCardJson
 
+          before_action { require_feature!("time_card") }
           before_action :require_admin!
 
           MAX_ROWS = 2_000

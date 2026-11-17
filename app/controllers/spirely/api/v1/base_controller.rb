@@ -134,6 +134,14 @@ module Spirely
         # require_family!, etc.) — call both when a controller needs both;
         # order between them doesn't matter, each renders+returns on its
         # own failure.
+        # Core feature switches (5ST-81): a feature the church turned off
+        # answers 404 to everyone, like a module that's off.
+        def require_feature!(name)
+          return if Current.church&.feature_enabled?(name)
+          render json: { error: "This feature is turned off for your church", code: "feature_disabled" },
+                 status: :not_found
+        end
+
         def require_module!(name)
           return if Current.church&.module_enabled?(name)
           render json: { error: "This feature isn't enabled for your church", code: "module_disabled" },

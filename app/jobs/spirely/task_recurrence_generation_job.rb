@@ -11,7 +11,10 @@ module Spirely
   # config/initializers/sidekiq.rb for the actual cron entry.
   class TaskRecurrenceGenerationJob < ApplicationJob
     def perform
+      # Not for churches with Tasks turned off (5ST-81); their overdue
+      # tasks catch up once it's back on.
       Spirely::Task
+        .joins(:church).where.not("'tasks' = ANY(churches.disabled_features)")
         .where(recurrence_mode: "absolute", next_occurrence_generated_at: nil)
         .where("due_date <= ?", Date.current)
         .find_each { |task| Spirely::TaskRecurrenceGenerator.call(task) }

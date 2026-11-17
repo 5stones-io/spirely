@@ -13,7 +13,8 @@ module Spirely
         # GET /api/v1/feedback_attachments/:signed_id
         def show
           blob = ActiveStorage::Blob.find_signed(params[:signed_id], purpose: "feedback_attachment")
-          unless blob&.attachments&.any? { |a| a.record_type == "Spirely::Feedback" }
+          attachment = blob&.attachments&.find { |a| a.record_type == "Spirely::Feedback" }
+          unless attachment&.record&.church&.feature_enabled?("feedback")
             return render json: { error: "Not found", code: "not_found" }, status: :not_found
           end
 

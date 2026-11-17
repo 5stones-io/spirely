@@ -9,7 +9,9 @@ module Spirely
       class FamilyPostsController < BaseController
         include Spirely::FamilyPostPhotosJson
 
+        before_action { require_feature!("family_posts") }
         before_action :require_family!
+        before_action(only: %i[pray stop_praying answer renew]) { require_feature!("prayer") }
         before_action :set_own_post, only: %i[update destroy answer renew]
         before_action :set_visible_post, only: %i[show pray stop_praying remove_tags]
 
@@ -21,7 +23,7 @@ module Spirely
         # audience — a family should always be able to see their own
         # pending/rejected/staff_only posts, just not anyone else's.
         def index
-          scope = Current.church.family_posts.visible_to_family(current_family)
+          scope = Current.church.family_posts.visible_to_family(current_family).allowed_types_for(Current.church)
           scope = scope.where(post_type: params[:post_type].to_s.split(",")) if params[:post_type].present?
 
           posts = scope.includes(:family, :guardian, :child, :answers_post, :tagged_children, { author: :account }, photos_attachments: :blob)
@@ -157,13 +159,14 @@ module Spirely
         private
 
         def set_own_post
-          @family_post = current_family.family_posts.find(params[:id])
+          @family_post = current_family.family_posts.allowed_types_for(Current.church).find(params[:id])
         rescue ActiveRecord::RecordNotFound
           render json: { error: "Post not found", code: "not_found" }, status: :not_found
         end
 
         def set_visible_post
-          @family_post = Current.church.family_posts.visible_to_family(current_family).find(params[:id])
+          @family_post = Current.church.family_posts.visible_to_family(current_family)
+                                .allowed_types_for(Current.church).find(params[:id])
         rescue ActiveRecord::RecordNotFound
           render json: { error: "Post not found", code: "not_found" }, status: :not_found
         end
