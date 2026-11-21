@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_17_000001) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_20_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pgcrypto"
   enable_extension "plpgsql"
@@ -740,6 +740,31 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_17_000001) do
     t.index ["refund_entry_id"], name: "index_spirely_store_orders_on_refund_entry_id"
   end
 
+  create_table "spirely_survey_responses", force: :cascade do |t|
+    t.bigint "survey_id", null: false
+    t.jsonb "answers", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.index ["survey_id"], name: "index_spirely_survey_responses_on_survey_id"
+  end
+
+  create_table "spirely_surveys", force: :cascade do |t|
+    t.bigint "church_id", null: false
+    t.string "slug", null: false
+    t.string "title", null: false
+    t.text "intro"
+    t.text "thanks"
+    t.string "home_blurb"
+    t.jsonb "questions", default: [], null: false
+    t.string "status", default: "open", null: false
+    t.boolean "show_on_home", default: true, null: false
+    t.datetime "opened_at"
+    t.datetime "closed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["church_id", "slug"], name: "index_spirely_surveys_on_church_id_and_slug", unique: true
+    t.index ["church_id"], name: "index_spirely_surveys_on_church_id"
+  end
+
   create_table "spirely_sync_settings", force: :cascade do |t|
     t.bigint "church_id", null: false
     t.boolean "inbound_people_sync", default: true, null: false
@@ -918,6 +943,8 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_17_000001) do
   add_foreign_key "spirely_store_orders", "spirely_people", column: "person_id"
   add_foreign_key "spirely_store_orders", "spirely_points_entries", column: "refund_entry_id", on_delete: :nullify
   add_foreign_key "spirely_store_orders", "spirely_store_items", column: "item_id"
+  add_foreign_key "spirely_survey_responses", "spirely_surveys", column: "survey_id", on_delete: :cascade
+  add_foreign_key "spirely_surveys", "churches"
   add_foreign_key "spirely_sync_settings", "churches"
   add_foreign_key "spirely_tasks", "churches"
   add_foreign_key "spirely_tasks", "memberships", column: "assignee_membership_id", on_delete: :nullify
