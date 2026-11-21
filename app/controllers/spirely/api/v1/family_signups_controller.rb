@@ -1,8 +1,11 @@
 module Spirely
   module Api
     module V1
-      # The new-family form a Create Account link opens (5ST-85). No
-      # sign-in: the token in the link is the key.
+      # The "confirm your email" link Create Account sends (5ST-85). No
+      # sign-in: the token in the link is the key. Opening it confirms the
+      # email (FamilySignup#confirm!) and says what's next: set up the
+      # account (invited, with invite_path), sign in (has_account), or the
+      # new-family form (started).
       class FamilySignupsController < BaseController
         skip_before_action :authenticate!
         before_action { require_feature!("family_signup") }
@@ -10,6 +13,7 @@ module Spirely
 
         # GET /api/v1/family_signups/:token
         def show
+          @signup.confirm!
           render json: signup_json
         end
 
@@ -41,8 +45,10 @@ module Spirely
         end
 
         def signup_json
+          invitation = @signup.invitation if @signup.status == "invited"
           { status: @signup.status, phone: @signup.phone, email: @signup.email,
-            church_name: Current.church.name, expired: @signup.expired? }
+            church_name: Current.church.name, expired: @signup.expired?,
+            invite_path: invitation && "/invite/#{invitation.token}" }
         end
       end
     end

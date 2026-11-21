@@ -1,23 +1,32 @@
 module Spirely
-  # A new family asking for an account from the church's site (5ST-85).
-  # Created when someone we don't have on file uses Create Account
-  # (Spirely::AccountRequest); the emailed link (#invite_url) opens a form
-  # where they fill in #details, and staff approve or decline it.
+  # Someone asking for an account from the church's site (5ST-85). Create
+  # Account (Spirely::AccountRequest) emails a "confirm your email" link
+  # (#invite_url) to whatever was typed, whoever they are. Opening it
+  # (#confirm!) is the first time we look them up, by the now-confirmed
+  # email:
   #
-  #   started → submitted → approved | declined
+  #   on file, no account  → invited (their invite, made here)
+  #   on file with one     → has_account (go sign in)
+  #   not on file          → started, with the new-family form; they fill
+  #                          in #details and staff approve or decline it:
+  #                          started → submitted → approved | declined
+  #
+  # The phone isn't confirmed, so a family with the same phone is only
+  # noted for staff (matched_family), never handed over.
   #
   # details: { "first_name", "last_name", "address",
   #            "children" => [{ "first_name", "last_name", "birthdate", "allergies" }] }
   class FamilySignup < ApplicationRecord
     class NotPending < StandardError; end
 
-    STATUSES = %w[started submitted approved declined].freeze
+    STATUSES = %w[started invited has_account submitted approved declined].freeze
     MAX_CHILDREN = 12
     EMAIL = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
 
     belongs_to :church
     belongs_to :matched_family, class_name: "Spirely::Family", optional: true
     belongs_to :family, class_name: "Spirely::Family", optional: true
+    belongs_to :invitation, class_name: "Spirely::Invitation", optional: true
     belongs_to :reviewed_by_account, class_name: "::Account", optional: true
 
     scope :waiting, -> { where(status: "submitted") }
@@ -43,6 +52,29 @@ module Spirely
 
     def expired?
       expires_at <= Time.current
+    end
+
+    # When they open the emailed link. Runs once; later visits see what the
+    # first one found.
+    def confirm!
+      with_lock do
+        next if status != "started" || email_confirmed_at || expired?
+
+        self.email_confirmed_at = Time.current
+        person = on_file_by_email
+        if person.nil?
+          self.matched_family = family_with_same_phone
+        elsif person.account_id
+          self.status = "has_account"
+          self.family = family_of(person)
+        else
+          self.status = "invited"
+          self.family = family_of(person)
+          self.invitation = invite(person)
+        end
+        save!
+      end
+      self
     end
 
     def submit!(raw)
@@ -90,6 +122,31 @@ module Spirely
 
     private
 
+    PHONE_DIGITS = "right(regexp_replace(coalesce(%s, ''), '\\D', '', 'g'), 10)"
+
+    def on_file_by_email
+      church.families.where("lower(email) = ?", email).order(:id).first ||
+        Spirely::Guardian.joins(:family).where(spirely_families: { church_id: church_id })
+                         .where("lower(spirely_guardians.email) = ?", email).order(:id).first
+    end
+
+    def family_with_same_phone
+      church.families.where("#{format(PHONE_DIGITS, "phone")} = ?", phone).order(:id).first ||
+        Spirely::Guardian.joins(:family).where(spirely_families: { church_id: church_id })
+                         .where("#{format(PHONE_DIGITS, "spirely_guardians.phone")} = ?", phone)
+                         .order(:id).first&.family
+    end
+
+    def family_of(person) = person.is_a?(Spirely::Guardian) ? person.family : person
+
+    # Same invite staff send: a guardian on file gets one of their own.
+    def invite(person)
+      family = family_of(person)
+      guardian = person.is_a?(Spirely::Guardian) ? person : nil
+      family.invitations.where(guardian: guardian, accepted_at: nil).update_all(expires_at: Time.current)
+      family.invitations.create!(guardian: guardian)
+    end
+
     def normalize_contact
       self.phone = self.class.normalize_phone(phone)
       self.email = email.to_s.strip.downcase
@@ -123,6 +180,7 @@ module Spirely
     end
 
     def details_complete
+      errors.add(:base, "Confirm your email first.") if email_confirmed_at.nil?
       errors.add(:base, "Add your first and last name.") if details["first_name"].blank? || details["last_name"].blank?
       errors.add(:base, "Add at least one child.") if Array(details["children"]).empty?
     end

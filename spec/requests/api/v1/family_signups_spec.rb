@@ -25,15 +25,18 @@ RSpec.describe "Family sign-ups API", type: :request do
   def json = JSON.parse(response.body)
 
   describe "POST /api/v1/account_requests" do
-    it "answers the same whether or not we know them, with no sign-in" do
+    it "answers the same whether or not we know them, with no sign-in, and emails the address typed" do
       create(:spirely_family, church: church, account: nil, phone: "5552013344", email: "onfile@example.com")
 
-      post "/api/v1/account_requests", params: { phone: "555-201-3344", email: "a@example.com" }, as: :json
-      known = [response.status, response.body]
-      post "/api/v1/account_requests", params: { phone: "555-777-8888", email: "b@example.com" }, as: :json
+      perform_enqueued_jobs do
+        post "/api/v1/account_requests", params: { phone: "555-201-3344", email: "a@example.com" }, as: :json
+        known = [response.status, response.body]
+        post "/api/v1/account_requests", params: { phone: "555-777-8888", email: "b@example.com" }, as: :json
+        expect([response.status, response.body]).to eq(known)
+      end
 
-      expect([response.status, response.body]).to eq(known)
       expect(response).to have_http_status(:accepted)
+      expect(ActionMailer::Base.deliveries.map(&:to).flatten).to eq(["a@example.com", "b@example.com"])
     end
 
     it "says what's wrong with a phone or email that isn't one" do
@@ -52,14 +55,28 @@ RSpec.describe "Family sign-ups API", type: :request do
   describe "the new-family form" do
     let!(:signup) { church.family_signups.create!(phone: "5552013344", email: "pat@example.com") }
 
-    it "shows the phone and email it was started with" do
+    it "confirms the email and shows the form, with the phone and email it was started with" do
       get "/api/v1/family_signups/#{signup.token}"
       expect(response).to have_http_status(:ok)
       expect(json).to include("status" => "started", "phone" => "5552013344", "email" => "pat@example.com",
-                              "church_name" => church.name, "expired" => false)
+                              "church_name" => church.name, "expired" => false, "invite_path" => nil)
+      expect(signup.reload.email_confirmed_at).to be_present
+    end
+
+    it "hands a family on file their account set-up instead" do
+      family = create(:spirely_family, church: church, account: nil, email: "pat@example.com")
+      get "/api/v1/family_signups/#{signup.token}"
+      expect(json).to include("status" => "invited", "invite_path" => "/invite/#{family.invitations.sole.token}")
+    end
+
+    it "tells someone with an account to sign in" do
+      create(:spirely_family, church: church, email: "pat@example.com")
+      get "/api/v1/family_signups/#{signup.token}"
+      expect(json).to include("status" => "has_account", "invite_path" => nil)
     end
 
     it "takes the family's details and emails the church's admins" do
+      get "/api/v1/family_signups/#{signup.token}"
       perform_enqueued_jobs do
         patch "/api/v1/family_signups/#{signup.token}", params: details, as: :json
       end
@@ -69,12 +86,20 @@ RSpec.describe "Family sign-ups API", type: :request do
     end
 
     it "says what's missing" do
+      get "/api/v1/family_signups/#{signup.token}"
       patch "/api/v1/family_signups/#{signup.token}", params: details.merge(children: []), as: :json
       expect(response).to have_http_status(:unprocessable_entity)
       expect(json["error"]).to be_present
     end
 
+    it "won't take it before the email's confirmed" do
+      patch "/api/v1/family_signups/#{signup.token}", params: details, as: :json
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(signup.reload.status).to eq("started")
+    end
+
     it "won't take it twice, or after the link expires" do
+      get "/api/v1/family_signups/#{signup.token}"
       patch "/api/v1/family_signups/#{signup.token}", params: details, as: :json
       patch "/api/v1/family_signups/#{signup.token}", params: details, as: :json
       expect(response).to have_http_status(:unprocessable_entity)
@@ -95,7 +120,8 @@ RSpec.describe "Family sign-ups API", type: :request do
 
   describe "admin" do
     let!(:signup) do
-      church.family_signups.create!(phone: "5552013344", email: "pat@example.com").tap { |s| s.submit!(details.deep_stringify_keys) }
+      church.family_signups.create!(phone: "5552013344", email: "pat@example.com")
+                           .tap { |s| s.confirm! && s.submit!(details.deep_stringify_keys) }
     end
 
     it "lists sign-ups waiting for staff, with the likely match" do

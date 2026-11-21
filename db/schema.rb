@@ -277,9 +277,11 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_000001) do
     t.datetime "expires_at", null: false
     t.string "status", default: "started", null: false
     t.jsonb "details", default: {}, null: false
+    t.datetime "email_confirmed_at"
     t.datetime "submitted_at"
     t.bigint "matched_family_id"
     t.bigint "family_id"
+    t.bigint "invitation_id"
     t.bigint "reviewed_by_account_id"
     t.datetime "reviewed_at"
     t.datetime "created_at", null: false
@@ -287,6 +289,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_000001) do
     t.index ["church_id", "status"], name: "index_spirely_family_signups_on_church_id_and_status"
     t.index ["church_id"], name: "index_spirely_family_signups_on_church_id"
     t.index ["family_id"], name: "index_spirely_family_signups_on_family_id"
+    t.index ["invitation_id"], name: "index_spirely_family_signups_on_invitation_id"
     t.index ["matched_family_id"], name: "index_spirely_family_signups_on_matched_family_id"
     t.index ["reviewed_by_account_id"], name: "index_spirely_family_signups_on_reviewed_by_account_id"
     t.index ["token"], name: "index_spirely_family_signups_on_token", unique: true
@@ -901,6 +904,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_000001) do
   add_foreign_key "spirely_family_signups", "churches"
   add_foreign_key "spirely_family_signups", "spirely_families", column: "family_id", on_delete: :nullify
   add_foreign_key "spirely_family_signups", "spirely_families", column: "matched_family_id", on_delete: :nullify
+  add_foreign_key "spirely_family_signups", "spirely_invitations", column: "invitation_id", on_delete: :nullify
   add_foreign_key "spirely_feedbacks", "accounts", on_delete: :nullify
   add_foreign_key "spirely_feedbacks", "churches"
   add_foreign_key "spirely_feedbacks", "spirely_families", column: "family_id", on_delete: :nullify
