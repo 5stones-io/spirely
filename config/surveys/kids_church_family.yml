@@ -23,7 +23,8 @@ questions:
       - Nursery (0-2)
       - Preschool (3-5)
       - Early elementary (K-2nd)
-      - Upper elementary (3rd-5th)
+      - Middle elementary (3rd-4th)
+      - Upper elementary (5th-6th)
   - id: attendance
     type: single
     text: How often do your children usually attend Kids Church?
