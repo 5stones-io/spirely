@@ -1,0 +1,123 @@
+# The Kids Church Family Survey (5ST-84): a year-end survey for parents.
+# Load it for a church with
+#   rails "spirely:surveys:create[church-slug,kids_church_family,year-end-2026]"
+#
+# Question types: single (pick one), multi (pick several; max limits how
+# many) and text. other: true adds an "Other" choice with a write-in;
+# follow_up adds a written question under the choices (e.g. "Why?").
+# section starts a new heading; note is shown under a section heading.
+title: Kids Church Family Survey
+intro: >-
+  We want Kids Church to be a place your child loves and a real help to
+  your family. This short survey takes about 5 minutes, and your answers
+  are anonymous. Thank you!
+thanks: Thank you for helping us serve your family well!
+home_blurb: Tell us how Kids Church is going for your family. It takes about 5 minutes, and it's anonymous.
+questions:
+  - id: age_groups
+    section: About your family
+    type: multi
+    text: Which age groups are your children in?
+    hint: Check all that apply.
+    options:
+      - Nursery (0-2)
+      - Preschool (3-5)
+      - Early elementary (K-2nd)
+      - Upper elementary (3rd-5th)
+  - id: attendance
+    type: single
+    text: How often do your children usually attend Kids Church?
+    options:
+      - Every week
+      - Every other week
+      - About once a month
+      - Occasionally
+  - id: enjoys
+    section: Your experience
+    note: "For questions 3-6, choose how much you agree."
+    type: single
+    text: My child enjoys coming to Kids Church and looks forward to it.
+    options: &agree
+      - Strongly agree
+      - Agree
+      - Disagree
+      - Strongly disagree
+      - Don't know
+  - id: safe
+    type: single
+    text: My child feels safe and has at least one adult leader they know and trust.
+    options: *agree
+  - id: welcome
+    type: single
+    text: I feel welcome, and I know who to talk to if I have a question or concern.
+    options: *agree
+  - id: learning
+    type: single
+    text: I know what my child is learning, and the information I get is easy to understand.
+    options: *agree
+  - id: hear_from
+    type: multi
+    max: 2
+    text: How would you like to hear from Kids Church?
+    hint: Pick up to 2.
+    options:
+      - Email
+      - Text message
+      - Church app
+      - Printed take-home sheet
+      - Talking with a leader at pickup
+      - Social media
+  - id: most_important
+    section: What matters most
+    type: multi
+    max: 2
+    other: true
+    text: What are the two most important things you want your child to walk away with?
+    hint: Pick 2.
+    options:
+      - A personal relationship with God
+      - A strong faith foundation
+      - Bible knowledge
+      - Good Christian friendships
+      - Positive role models and mentors
+      - A positive church experience
+      - Experience serving others
+  - id: delivering
+    type: single
+    text: How well is Kids Church delivering on the two things you chose?
+    options:
+      - With excellence
+      - A good job
+      - Not sure
+      - Room for improvement
+      - It's lacking
+    follow_up: Why?
+  - id: at_home
+    type: single
+    text: How has Kids Church carried over into your home?
+    options:
+      - It hasn't yet
+      - "A little: we've talked about a lesson or used a take-home once or twice"
+      - "Often: we talk about lessons or use take-homes most weeks"
+      - "A lot: it's part of our family's faith life"
+  - id: interested_in
+    section: Looking ahead
+    type: multi
+    text: Which of these would your family be interested in?
+    hint: Check all that apply.
+    options:
+      - Family events with other Kids Church families
+      - Parent workshops (faith at home, parenting topics)
+      - Serving in Kids Church
+      - Family serving or outreach projects
+      - None right now
+  - id: satisfied
+    type: single
+    text: Overall, how satisfied are you with Kids Church?
+    options:
+      - Extremely satisfied
+      - Very satisfied
+      - Moderately satisfied
+      - Somewhat satisfied
+      - Not satisfied
+    follow_up: What's one thing we could do better?

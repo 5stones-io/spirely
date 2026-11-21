@@ -83,3 +83,17 @@ namespace :spirely do
     puts "  5. Sign in and promote yourself: ADMIN_EMAIL=you@example.com rails spirely:first_deploy\n\n"
   end
 end
+
+namespace :spirely do
+  namespace :surveys do
+    # Anonymous surveys (5ST-84). Templates live in config/surveys/.
+    desc "Load a survey for a church from a template. Usage: rails \"spirely:surveys:create[church-slug,kids_church_family,year-end-2026]\""
+    task :create, [:church, :template, :slug] => :environment do |_, args|
+      abort "Usage: rails \"spirely:surveys:create[church-slug,template,survey-slug]\"" if args.to_h.values_at(:church, :template, :slug).any?(&:blank?)
+
+      church = Church.find_by!(slug: args[:church])
+      survey = Spirely::Survey.from_template!(church, args[:template], slug: args[:slug])
+      puts "Created \"#{survey.title}\" for #{church.name}: /survey/#{survey.slug} (#{survey.questions.size} questions, open)"
+    end
+  end
+end

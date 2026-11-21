@@ -87,6 +87,12 @@ Spirely::Engine.routes.draw do
       post   "shout_outs",                               to: "recognition#create"
       post   "my_points/redeem",                         to: "my_points#redeem"
 
+      # Anonymous surveys (5ST-84): families answer on the church's site
+      # with no sign-in.
+      get    "surveys",                                  to: "surveys#index"
+      get    "surveys/:slug",                            to: "surveys#show"
+      post   "surveys/:slug/responses",                  to: "surveys#respond"
+
       get    "schedule_responses/:token",                to: "schedule_responses#show"
       post   "schedule_responses/:token",                to: "schedule_responses#create"
 
@@ -115,6 +121,8 @@ Spirely::Engine.routes.draw do
         resource  :staff, only: [:show], controller: "staff"
         resources :staff_invitations, only: [:create]
         resources :tasks, only: [:index, :show, :create, :update, :destroy]
+        # Survey results (5ST-84).
+        resources :surveys, only: [:index, :show, :update]
         # Settings → which PCO group types are children's groups (shared
         # groups data, 5ST-51).
         resources :group_types, only: [:index, :update]
