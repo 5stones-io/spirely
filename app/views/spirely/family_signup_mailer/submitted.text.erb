@@ -1,0 +1,6 @@
+<%= @name %> asked for a family account with <%= @church.name %> and is waiting for approval.
+
+<%= pluralize(Array(@signup.details["children"]).size, "child") %> · <%= @signup.email %>
+<% if @signup.matched_family %>This might be the <%= @signup.matched_family.family_name %>, already on file.
+<% end %>
+Review it in Families: <%= @url %>

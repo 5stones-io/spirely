@@ -92,6 +92,11 @@ Spirely::Engine.routes.draw do
       get    "surveys",                                  to: "surveys#index"
       get    "surveys/:slug",                            to: "surveys#show"
       post   "surveys/:slug/responses",                  to: "surveys#respond"
+      # Create Account (5ST-85): families ask for an account on the
+      # church's site, and new ones fill in a form staff approve. No sign-in.
+      post   "account_requests",                         to: "account_requests#create"
+      get    "family_signups/:token",                    to: "family_signups#show"
+      patch  "family_signups/:token",                    to: "family_signups#update"
 
       get    "schedule_responses/:token",                to: "schedule_responses#show"
       post   "schedule_responses/:token",                to: "schedule_responses#create"
@@ -123,6 +128,12 @@ Spirely::Engine.routes.draw do
         resources :tasks, only: [:index, :show, :create, :update, :destroy]
         # Survey results (5ST-84).
         resources :surveys, only: [:index, :show, :update]
+        resources :family_signups, only: [:index] do
+          member do
+            post :approve
+            post :decline
+          end
+        end
         # Settings → which PCO group types are children's groups (shared
         # groups data, 5ST-51).
         resources :group_types, only: [:index, :update]
