@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 16px; color: #1a1a1a;">
+  <p style="color: #555;"><strong><%= @name %></strong> asked for a family account with <%= @church.name %> and is waiting for approval.</p>
+  <p style="color: #555;">
+    <%= pluralize(Array(@signup.details["children"]).size, "child") %> ·
+    <%= @signup.email %>
+    <% if @signup.matched_family %><br>This might be the <%= @signup.matched_family.family_name %>, already on file.<% end %>
+  </p>
+  <p><a href="<%= @url %>">Review it in Families</a></p>
+</body>
+</html>

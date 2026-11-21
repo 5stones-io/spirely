@@ -135,7 +135,7 @@ RSpec.describe "Feature switches", type: :request do
 
       expect(response).to have_http_status(:ok)
       features = json["features"].index_by { |f| f["id"] }
-      expect(features.keys).to eq(%w[volunteers tasks time_card family_posts prayer feedback events surveys])
+      expect(features.keys).to eq(%w[volunteers tasks time_card family_posts prayer feedback events surveys family_signup])
       expect(features["time_card"]).to include("label" => "Time card", "enabled" => false)
       expect(features["tasks"]).to include("enabled" => true)
       expect(features["volunteers"]).to include("module" => "kidsmin")
@@ -154,7 +154,7 @@ RSpec.describe "Feature switches", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(church.reload.disabled_features).to contain_exactly("tasks", "events")
-      expect(json["enabled_features"]).to eq(%w[volunteers time_card family_posts prayer feedback surveys])
+      expect(json["enabled_features"]).to eq(%w[volunteers time_card family_posts prayer feedback surveys family_signup])
     end
 
     it "turns everything back on with an empty list" do
@@ -185,7 +185,7 @@ RSpec.describe "Feature switches", type: :request do
       turn_off("time_card", "family_posts")
       get "/api/v1/me", headers: auth_headers(admin)
 
-      expect(json["enabled_features"]).to eq(%w[volunteers tasks feedback events surveys])
+      expect(json["enabled_features"]).to eq(%w[volunteers tasks feedback events surveys family_signup])
       expect(json["time_card"]).to be(false)
       expect(json["post_to_families"]).to be(false)
     end

@@ -24,6 +24,7 @@ class Church < ApplicationRecord
     "feedback"     => { label: "Feedback",        description: "Feedback and requests from families and volunteers." },
     "events"       => { label: "Events",          description: "Upcoming events from Planning Center Calendar." },
     "surveys"      => { label: "Surveys",         description: "Anonymous surveys families answer on your site." },
+    "family_signup" => { label: "Family sign-up", description: "Families ask for an account from your site. You approve new families." },
   }.freeze
   # Modules that use the shared Planning Center Groups data (Spirely::Group
   # & co). Kids Ministry doesn't need its own entry: on a kids-only domain
@@ -73,6 +74,7 @@ class Church < ApplicationRecord
   has_many :family_posts, class_name: "Spirely::FamilyPost", dependent: :destroy
   has_many :feedbacks, class_name: "Spirely::Feedback", dependent: :destroy
   has_many :surveys, class_name: "Spirely::Survey", dependent: :destroy
+  has_many :family_signups, class_name: "Spirely::FamilySignup", dependent: :destroy
   has_many :group_types, class_name: "Spirely::GroupType", dependent: :destroy
   has_many :groups, class_name: "Spirely::Group", dependent: :destroy
   has_many :group_memberships, class_name: "Spirely::GroupMembership", dependent: :destroy
