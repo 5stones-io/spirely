@@ -1,6 +1,7 @@
 module Spirely
-  # Creates a brand-new person (and their children) in Planning Center when a
-  # family is quick-added and doesn't already have a PCO ID.
+  # Creates a brand-new person, any other parent and their children in
+  # Planning Center, in one household, when a family is quick-added or a
+  # sign-up approved and doesn't already have a PCO ID.
   class PcoCreatePersonJob < ApplicationJob
     def perform(family_id)
       family = Family.find(family_id)
@@ -18,6 +19,7 @@ module Spirely
       client = Spirely::PcoClient.new(church.church_integration)
 
       pco_person_id = family.pco_person_id
+      retrying = pco_person_id.present?
       if pco_person_id.blank?
         person_resp = client.post("/people/v2/people", {
           data: {
@@ -45,17 +47,10 @@ module Spirely
         family.update_columns(pco_person_id: pco_person_id, pco_created_at: pco_created_at)
       end
 
-      if family.email.present?
-        client.post("/people/v2/people/#{pco_person_id}/emails", {
-          data: { type: "Email", attributes: { address: family.email, primary: true, location: "Home" } }
-        })
-      end
-
-      if family.phone.present?
-        client.post("/people/v2/people/#{pco_person_id}/phone_numbers", {
-          data: { type: "PhoneNumber", attributes: { number: family.phone, primary: true, location: "Mobile" } }
-        })
-      end
+      # On a retry the person may already have these: PCO refuses a
+      # duplicate (409), which stopped every retry for the Kamaras
+      # (2026-11-22) before it got to their household.
+      add_contact(client, pco_person_id, email: family.email, phone: family.phone, check: retrying)
 
       Spirely::PcoAddress.push(client, pco_person_id, family.address)
 
@@ -68,6 +63,22 @@ module Spirely
             "data" => [{ "type" => "Person", "id" => pco_person_id }]
           })
         end
+      end
+
+      # Another parent added on Quick Add. Saved one at a time, like the
+      # primary contact, so a retry doesn't make them twice.
+      guardian_pco_ids = family.guardians.order(:id).map do |g|
+        next g.pco_person_id if g.pco_person_id.present?
+
+        resp = client.post("/people/v2/people", {
+          data: { type: "Person", attributes: { first_name: g.first_name, last_name: g.last_name.presence || family.primary_contact_last_name } }
+        })
+        id = resp.dig("data", "id")
+        raise "PCO did not return a person id" unless id
+
+        g.update_column(:pco_person_id, id)
+        add_contact(client, id, email: g.email, phone: g.phone, check: false)
+        id
       end
 
       child_pco_ids = []
@@ -97,41 +108,25 @@ module Spirely
         child_pco_ids << child_pco_id
       end
 
-      # PCO has no direct "parent" attribute on Person — a household is what
-      # actually links a parent and their kids. Household creation only
-      # sets the primary_contact as a member; each child needs its own
-      # membership call after, added as child_or_dependent — confirmed
-      # directly against a real PCO org while debugging this job, there's
-      # no single call that does both.
-      if child_pco_ids.any?
-        household_id = family.pco_household_id
-        if household_id.blank?
-          household_resp = client.post("/people/v2/households", {
-            data: {
-              type: "Household",
-              attributes: { name: family.family_name, primary_contact_id: pco_person_id }
-            }
-          })
-          household_id = household_resp.dig("data", "id")
-          family.update_column(:pco_household_id, household_id) if household_id
-        end
-
-        # Not guarded per-child the way person creation is above — there's
-        # no cheap way to know which children already have a confirmed
-        # membership without an extra GET. Re-adding an already-linked
-        # child on a retry is a much smaller risk than leaving one
-        # permanently unlinked because an earlier attempt's household
-        # call succeeded but a later child's membership call didn't.
-        if household_id
-          child_pco_ids.each do |child_id|
-            client.post("/people/v2/households/#{household_id}/household_memberships", {
-              data: {
-                type: "HouseholdMembership",
-                attributes: { person_id: child_id, household_role: "child_or_dependent" }
-              }
-            })
-          end
-        end
+      # A household is what links a parent and their kids in PCO. One call
+      # makes it with everyone in it; members and the primary contact go in
+      # relationships (PCO's format, planningcenter/developers#463). Named
+      # the way PCO names households, "Rivera Household".
+      others = guardian_pco_ids + child_pco_ids
+      if others.any? && family.pco_household_id.blank?
+        person = ->(id) { { type: "Person", id: id } }
+        household_resp = client.post("/people/v2/households", {
+          data: {
+            type: "Household",
+            attributes: { name: "#{family.primary_contact_last_name.presence || family.family_name} Household" },
+            relationships: {
+              people: { data: [pco_person_id, *others].map(&person) },
+              primary_contact: { data: person.(pco_person_id) },
+            },
+          }
+        })
+        household_id = household_resp.dig("data", "id")
+        family.update_column(:pco_household_id, household_id) if household_id
       end
 
       family.update_column(:pco_last_synced_at, Time.current)
@@ -140,8 +135,32 @@ module Spirely
     rescue ActiveRecord::RecordNotFound
       Rails.logger.warn("[Spirely] PcoCreatePersonJob: family #{family_id} not found")
     rescue Spirely::PcoError => e
-      Rails.logger.error("[Spirely] PcoCreatePersonJob failed for family #{family_id}: #{e.message}")
+      detail = e.respond_to?(:body) && e.body.present? ? " #{e.body.to_s.truncate(500)}" : ""
+      Rails.logger.error("[Spirely] PcoCreatePersonJob failed for family #{family_id}: #{e.message}#{detail}")
       raise
+    end
+
+    private
+
+    # The email and phone on a PCO person, skipping any it already has
+    # when check is true.
+    def add_contact(client, person_id, email:, phone:, check:)
+      if email.present? && !(check && has?(client, person_id, "emails", "address") { _1.to_s.casecmp?(email) })
+        client.post("/people/v2/people/#{person_id}/emails", {
+          data: { type: "Email", attributes: { address: email, primary: true, location: "Home" } }
+        })
+      end
+
+      digits = ->(n) { n.to_s.gsub(/\D/, "").last(10) }
+      if phone.present? && !(check && has?(client, person_id, "phone_numbers", "number") { digits.(_1) == digits.(phone) })
+        client.post("/people/v2/people/#{person_id}/phone_numbers", {
+          data: { type: "PhoneNumber", attributes: { number: phone, primary: true, location: "Mobile" } }
+        })
+      end
+    end
+
+    def has?(client, person_id, kind, attribute, &match)
+      Array(client.get("/people/v2/people/#{person_id}/#{kind}")["data"]).any? { match.(_1.dig("attributes", attribute)) }
     end
   end
 end
